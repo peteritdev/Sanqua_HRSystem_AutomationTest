@@ -1,0 +1,64 @@
+<% title = 'Overtime Test Conditions' %>
+<%- include('../partials/header') %>
+
+<div class="page-header">
+  <h1>Overtime - Test Conditions</h1>
+  <div class="actions">
+    <button id="btn-run-all" class="btn btn-primary">RUN ALL CONDITIONS</button>
+    <a href="/overtime/new" class="btn btn-secondary">+ New Test Case</a>
+    <a href="/overtime/import" class="btn btn-secondary">Import Excel</a>
+  </div>
+</div>
+
+<div id="run-all-summary" class="banner" hidden></div>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Kode</th>
+      <th>Test Case</th>
+      <th>Company</th>
+      <th>Employee</th>
+      <th>Shift</th>
+      <th>Period Date</th>
+      <th>Expected (before / after)</th>
+      <th>Actual (before / after)</th>
+      <th>Status</th>
+      <th>Last Run At</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% if (!conditions.length) { %>
+      <tr><td colspan="11" class="empty">Belum ada test case. Klik "+ New Test Case" untuk mulai.</td></tr>
+    <% } %>
+    <% conditions.forEach(c => { %>
+      <tr data-row-id="<%= c.id %>">
+        <td><span class="code-badge"><%= c.test_case_code %></span></td>
+        <td><%= c.test_case_name %></td>
+        <td><%= c.company_name || c.company_id %></td>
+        <td><%= c.employee_name ? `${c.employee_name} (${c.employee_nik || '-'})` : c.employee_id %></td>
+        <td><%= c.shift_name || '-' %></td>
+        <td><%= c.period_date %></td>
+        <td><%= formatHM(c.expected_result_before_rounding) %> / <%= formatHM(c.expected_result_after_rounding) %></td>
+        <td class="cell-actual"><%= formatHM(c.actual_result_before_rounding) %> / <%= formatHM(c.actual_result_after_rounding) %></td>
+        <td class="cell-status">
+          <span class="badge badge-<%= c.last_run_status || 'neutral' %>">
+            <%= c.last_run_status || 'belum pernah run' %>
+          </span>
+        </td>
+        <td class="cell-last-run-at"><%= c.last_run_at ? new Date(c.last_run_at).toLocaleString('id-ID') : '-' %></td>
+        <td class="row-actions">
+          <button class="btn btn-small btn-run" data-id="<%= c.id %>">RUN</button>
+          <a class="btn btn-small btn-secondary" href="/overtime/<%= c.id %>/edit">Edit</a>
+          <form method="POST" action="/overtime/<%= c.id %>/delete" onsubmit="return confirm('Nonaktifkan test case ini?');" class="inline-form">
+            <button class="btn btn-small btn-danger" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>
+<script src="/js/overtime.js"></script>

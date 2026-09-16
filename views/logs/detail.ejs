@@ -1,0 +1,41 @@
+<% title = 'Detail Run - ' + runId %>
+<%- include('../partials/header') %>
+
+<h1>Detail Run</h1>
+<p class="run-id-label">Run ID: <code><%= runId %></code></p>
+<p><a href="/overtime/logs">&larr; Kembali ke list log</a></p>
+
+<% logs.forEach(l => { %>
+  <div class="log-card">
+    <div class="log-card-header">
+      <span class="badge badge-<%= l.status %>"><%= l.status %></span>
+      <span class="code-badge"><%= l.test_data_condition.test_case_code || '-' %></span>
+      <strong><%= l.test_data_condition.test_case_name %></strong>
+    </div>
+    <div class="log-card-body">
+      <div class="log-col">
+        <h4>Test Data (snapshot saat run)</h4>
+        <pre><%= JSON.stringify(l.test_data_condition, null, 2) %></pre>
+      </div>
+      <div class="log-col">
+        <h4>Expected</h4>
+        <p class="hm-summary"><%= formatHM(l.expected_result?.before_rounding) %> / <%= formatHM(l.expected_result?.after_rounding) %> <span class="muted">(before / after rounding)</span></p>
+        <pre><%= JSON.stringify(l.expected_result, null, 2) %></pre>
+        <h4>Actual</h4>
+        <p class="hm-summary"><%= formatHM(l.actual_result?.before_rounding) %> / <%= formatHM(l.actual_result?.after_rounding) %> <span class="muted">(before / after rounding)</span></p>
+        <pre><%= JSON.stringify(l.actual_result, null, 2) %></pre>
+        <% if (l.error_message) { %>
+          <h4>Error</h4>
+          <pre class="error-text"><%= l.error_message %></pre>
+        <% } %>
+      </div>
+    </div>
+    <div class="log-card-footer">
+      <span>Duration: <%= l.duration_ms ?? '-' %> ms</span>
+      <span>Triggered by: <%= l.triggered_by %></span>
+      <span><%= new Date(l.log_time).toLocaleString('id-ID') %></span>
+    </div>
+  </div>
+<% }) %>
+
+<%- include('../partials/footer') %>

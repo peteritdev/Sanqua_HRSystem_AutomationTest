@@ -1,0 +1,85 @@
+<% title = 'Log Run - Overtime' %>
+<%- include('../partials/header') %>
+
+<div class="page-header">
+  <h1>Log Run - Overtime</h1>
+  <form method="POST" action="/overtime/logs/clear" class="inline-form"
+        onsubmit="return confirm('Hapus SEMUA log run overtime? Tindakan ini tidak bisa dibatalkan (status last-run di test case tidak ikut berubah).');">
+    <button type="submit" class="btn btn-danger">Clear Log</button>
+  </form>
+</div>
+
+<form method="GET" action="/overtime/logs" class="filter-form">
+  <div class="form-row">
+    <label>Status</label>
+    <select name="status">
+      <option value="">-- semua --</option>
+      <option value="passed" <%= filters.status === 'passed' ? 'selected' : '' %>>passed</option>
+      <option value="not_passed" <%= filters.status === 'not_passed' ? 'selected' : '' %>>not_passed</option>
+      <option value="error" <%= filters.status === 'error' ? 'selected' : '' %>>error</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>Dari Tanggal</label>
+    <input type="date" name="date_from" value="<%= filters.date_from %>">
+  </div>
+  <div class="form-row">
+    <label>Sampai Tanggal</label>
+    <input type="date" name="date_to" value="<%= filters.date_to %>">
+  </div>
+  <div class="form-row">
+    <label>Run ID</label>
+    <input type="text" name="run_id" value="<%= filters.run_id %>" placeholder="uuid run_id">
+  </div>
+  <div class="form-row form-row-submit">
+    <button type="submit" class="btn btn-primary">Filter</button>
+    <a href="/overtime/logs" class="btn btn-secondary">Reset</a>
+  </div>
+</form>
+
+<p class="total-count">Total: <%= totalCount %> log</p>
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Run ID</th>
+      <th>Kode Test Case</th>
+      <th>Status</th>
+      <th>Actual (before/after)</th>
+      <th>Error</th>
+      <th>Duration (ms)</th>
+      <th>Triggered By</th>
+      <th>Log Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% if (!logs.length) { %>
+      <tr><td colspan="9" class="empty">Tidak ada log yang cocok dengan filter.</td></tr>
+    <% } %>
+    <% logs.forEach(l => { %>
+      <tr>
+        <td><%= l.id %></td>
+        <td><a href="/overtime/logs/<%= l.run_id %>"><%= l.run_id.toString().slice(0, 8) %>...</a></td>
+        <td><span class="code-badge"><%= l.test_data_condition?.test_case_code || l.condition_id %></span></td>
+        <td><span class="badge badge-<%= l.status %>"><%= l.status %></span></td>
+        <td><%= formatHM(l.actual_result?.before_rounding) %> / <%= formatHM(l.actual_result?.after_rounding) %></td>
+        <td><%= l.error_message || '-' %></td>
+        <td><%= l.duration_ms ?? '-' %></td>
+        <td><%= l.triggered_by %></td>
+        <td><%= new Date(l.log_time).toLocaleString('id-ID') %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<div class="pagination">
+  <% for (let p = 1; p <= totalPages; p++) { %>
+    <a class="page-link <%= p === page ? 'active' : '' %>"
+       href="?page=<%= p %>&status=<%= filters.status %>&date_from=<%= filters.date_from %>&date_to=<%= filters.date_to %>&run_id=<%= filters.run_id %>">
+      <%= p %>
+    </a>
+  <% } %>
+</div>
+
+<%- include('../partials/footer') %>

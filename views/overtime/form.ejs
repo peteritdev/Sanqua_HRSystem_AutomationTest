@@ -1,0 +1,138 @@
+<%
+  title = mode === 'edit' ? 'Edit Test Case - Overtime' : 'New Test Case - Overtime';
+  function fieldValue(name, dateFormat) {
+    if (formData && formData[name] !== undefined && formData[name] !== null) return formData[name];
+    if (condition && condition[name] !== undefined && condition[name] !== null) {
+      if (dateFormat) return moment(condition[name]).format(dateFormat);
+      return condition[name];
+    }
+    return '';
+  }
+  const isBreakChecked = formData && formData.is_break !== undefined
+    ? (formData.is_break === 'on' || formData.is_break === 'true')
+    : !!(condition && condition.is_break);
+
+  function hmValue(fieldPrefix, conditionColumn) {
+    if (formData && formData[`${fieldPrefix}_hours`] !== undefined) {
+      return { hours: formData[`${fieldPrefix}_hours`], minutes: formData[`${fieldPrefix}_minutes`] };
+    }
+    return decimalHoursToHM(condition ? condition[conditionColumn] : 0);
+  }
+  const expectedBeforeHM = hmValue('expected_result_before_rounding', 'expected_result_before_rounding');
+  const expectedAfterHM = hmValue('expected_result_after_rounding', 'expected_result_after_rounding');
+%>
+<%- include('../partials/header') %>
+
+<h1><%= title %></h1>
+
+<% if (mode === 'edit') { %>
+  <p class="code-label">Kode: <span class="code-badge"><%= condition.test_case_code %></span></p>
+<% } else { %>
+  <p class="code-label muted">Kode test case akan di-generate otomatis (format TC-OT-0001) setelah disimpan.</p>
+<% } %>
+
+<% if (errors && errors.length) { %>
+  <div class="banner banner-error">
+    <ul>
+      <% errors.forEach(e => { %><li><%= e.msg %></li><% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<form method="POST" action="<%= mode === 'edit' ? `/overtime/${condition.id}/edit` : '/overtime/new' %>" class="form">
+  <div class="form-row">
+    <label>Test Case Name</label>
+    <input type="text" name="test_case_name" value="<%= fieldValue('test_case_name') %>" required>
+  </div>
+
+  <div class="form-row">
+    <label>Test Objective</label>
+    <textarea name="test_objective" rows="2"><%= fieldValue('test_objective') %></textarea>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Company</label>
+      <select name="company_id" id="company_id" required>
+        <option value="">-- pilih company --</option>
+        <% companies.forEach(c => { %>
+          <option value="<%= c.id %>" <%= String(fieldValue('company_id')) === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>Employee</label>
+      <select name="employee_id" id="employee_id" required>
+        <option value="">-- pilih employee --</option>
+        <% employees.forEach(e => { %>
+          <option value="<%= e.id %>" <%= String(fieldValue('employee_id')) === String(e.id) ? 'selected' : '' %>><%= e.name %> (<%= e.nik || '-' %>)</option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>Shift (opsional)</label>
+      <select name="shift_id" id="shift_id">
+        <option value="">-- tidak ada shift --</option>
+        <% shifts.forEach(s => { %>
+          <option value="<%= s.id %>" <%= String(fieldValue('shift_id')) === String(s.id) ? 'selected' : '' %>><%= s.name %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Clock In</label>
+      <input type="datetime-local" name="clock_in" value="<%= fieldValue('clock_in', 'YYYY-MM-DDTHH:mm') %>" required>
+    </div>
+    <div class="form-row">
+      <label>Clock Out</label>
+      <input type="datetime-local" name="clock_out" value="<%= fieldValue('clock_out', 'YYYY-MM-DDTHH:mm') %>" required>
+    </div>
+    <div class="form-row">
+      <label>Period Date</label>
+      <input type="date" name="period_date" value="<%= fieldValue('period_date', 'YYYY-MM-DD') %>" required>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Overtime Start (request_start_time)</label>
+      <input type="datetime-local" name="overtime_start" value="<%= fieldValue('overtime_start', 'YYYY-MM-DDTHH:mm') %>" required>
+    </div>
+    <div class="form-row">
+      <label>Overtime End (request_end_time)</label>
+      <input type="datetime-local" name="overtime_end" value="<%= fieldValue('overtime_end', 'YYYY-MM-DDTHH:mm') %>" required>
+    </div>
+    <div class="form-row form-row-checkbox">
+      <label><input type="checkbox" name="is_break" <%= isBreakChecked ? 'checked' : '' %>> Is Break</label>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Expected Result - Before Rounding</label>
+      <div class="hm-input">
+        <input type="number" name="expected_result_before_rounding_hours" value="<%= expectedBeforeHM.hours %>" required> <span>jam</span>
+        <input type="number" min="0" max="59" name="expected_result_before_rounding_minutes" value="<%= expectedBeforeHM.minutes %>" required> <span>menit</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Expected Result - After Rounding</label>
+      <div class="hm-input">
+        <input type="number" name="expected_result_after_rounding_hours" value="<%= expectedAfterHM.hours %>" required> <span>jam</span>
+        <input type="number" min="0" max="59" name="expected_result_after_rounding_minutes" value="<%= expectedAfterHM.minutes %>" required> <span>menit</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="/overtime" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+
+<%- include('../partials/footer') %>
+<script src="/js/overtime-form.js"></script>

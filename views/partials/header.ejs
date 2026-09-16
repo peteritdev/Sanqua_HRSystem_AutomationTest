@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title : 'HR Automation Test Tool' %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="/overtime" class="brand">HR Automation Test Tool</a>
+      <nav>
+        <a href="/overtime">Overtime</a>
+        <a href="/overtime/import">Import</a>
+        <a href="/overtime/logs">Logs</a>
+      </nav>
+    </div>
+    <form class="tester-form" method="POST" action="/tester-name">
+      <label for="tester_name">Tester:</label>
+      <input type="text" id="tester_name" name="tester_name"
+             value="<%= testerName !== 'anonymous' ? testerName : '' %>" placeholder="nama kamu">
+      <button type="submit">Set</button>
+    </form>
+  </header>
+  <main class="container">

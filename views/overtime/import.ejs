@@ -1,0 +1,82 @@
+<% title = 'Import Test Case - Overtime' %>
+<%- include('../partials/header') %>
+
+<h1>Import Test Case dari Excel</h1>
+
+<div class="import-box">
+  <h3>1. Download template</h3>
+  <p>Template berisi sheet <strong>Petunjuk</strong> (cara isi), <strong>Test Case</strong> (yang diisi),
+    dan referensi master data: <strong>Master Company</strong>, <strong>Master Employee</strong>, <strong>Master Shift</strong>
+    (isi ID dari sheet-sheet ini ke kolom company_id/employee_id/shift_id).</p>
+  <a href="/overtime/import/template" class="btn btn-secondary">Download Template (.xlsx)</a>
+</div>
+
+<div class="import-box">
+  <h3>2. Format kolom sheet "Test Case"</h3>
+  <table class="grid">
+    <thead>
+      <tr><th>Kolom</th><th>Wajib?</th><th>Format</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>test_case_name</td><td>Wajib</td><td>Teks bebas</td></tr>
+      <tr><td>company_id</td><td>Wajib</td><td>Angka - lihat sheet Master Company</td></tr>
+      <tr><td>employee_id</td><td>Wajib</td><td>Angka - lihat sheet Master Employee (harus company yang sama)</td></tr>
+      <tr><td>shift_id</td><td>Opsional</td><td>Angka - lihat sheet Master Shift, kosongkan kalau tidak ada</td></tr>
+      <tr><td>clock_in / clock_out</td><td>Wajib</td><td>YYYY-MM-DD HH:mm</td></tr>
+      <tr><td>period_date</td><td>Wajib</td><td>YYYY-MM-DD</td></tr>
+      <tr><td>overtime_start / overtime_end</td><td>Wajib</td><td>YYYY-MM-DD HH:mm</td></tr>
+      <tr><td>is_break</td><td>Wajib</td><td>TRUE atau FALSE</td></tr>
+      <tr><td>expected_before_hours / minutes</td><td>Wajib</td><td>Angka bulat (jam boleh negatif, menit 0-59)</td></tr>
+      <tr><td>expected_after_hours / minutes</td><td>Wajib</td><td>Angka bulat (jam boleh negatif, menit 0-59)</td></tr>
+      <tr><td>test_objective</td><td>Opsional</td><td>Teks bebas</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">Kode test case (TC-OT-0001) di-generate otomatis, tidak perlu diisi. Baris yang test_case_name-nya kosong akan dilewati.</p>
+</div>
+
+<div class="import-box">
+  <h3>3. Upload file</h3>
+  <form method="POST" action="/overtime/import" enctype="multipart/form-data" class="form">
+    <div class="form-row">
+      <label>File (.xlsx)</label>
+      <input type="file" name="file" accept=".xlsx" required>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Upload & Import</button>
+      <a href="/overtime" class="btn btn-secondary">Kembali ke List</a>
+    </div>
+  </form>
+</div>
+
+<% if (result) { %>
+  <div class="import-box">
+    <h3>Hasil Import</h3>
+    <% if (result.fatalError) { %>
+      <div class="banner banner-error"><%= result.fatalError %></div>
+    <% } else { %>
+      <div class="banner">
+        Berhasil di-import: <strong><%= result.inserted %></strong> test case.
+        Baris gagal/dilewati karena error: <strong><%= result.totalError %></strong>.
+      </div>
+      <% if (result.errors.length) { %>
+        <table class="grid">
+          <thead>
+            <tr><th>Baris Excel</th><th>test_case_name</th><th>Alasan Gagal</th></tr>
+          </thead>
+          <tbody>
+            <% result.errors.forEach(e => { %>
+              <tr>
+                <td><%= e.row %></td>
+                <td><%= e.test_case_name || '-' %></td>
+                <td><%= e.message %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+      <p><a href="/overtime">Lihat test case yang sudah masuk &rarr;</a></p>
+    <% } %>
+  </div>
+<% } %>
+
+<%- include('../partials/footer') %>
