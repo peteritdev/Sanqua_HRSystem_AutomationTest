@@ -18,11 +18,28 @@ function cellValue(cell) {
   return v;
 }
 
+// File .xlsx asli (ditulis Excel, bukan lewat exceljs) nyimpen tanggal sebagai
+// serial number POLOS tanpa timezone. Saat exceljs baca cell bertipe date, dia
+// bikin JS Date dengan MENGANGGAP angka wall-clock itu sebagai UTC (bukan lokal) -
+// jadi value.getUTCHours() itu yang sebenarnya sesuai apa yang diketik user di
+// Excel, sedangkan value.getHours() (lokal WIB) sudah kegeser +7 jam dan SALAH.
+// Makanya harus re-interpret komponen UTC-nya sebagai wall-clock lokal.
+function excelDateToLocalDate(value) {
+  return new Date(
+    value.getUTCFullYear(),
+    value.getUTCMonth(),
+    value.getUTCDate(),
+    value.getUTCHours(),
+    value.getUTCMinutes(),
+    value.getUTCSeconds()
+  );
+}
+
 function parseDateTime(value, fieldLabel) {
   if (value === null || value === undefined || value === '') {
     throw new Error(`${fieldLabel} wajib diisi`);
   }
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return excelDateToLocalDate(value);
   const parsed = moment(String(value).trim(), 'YYYY-MM-DD HH:mm', true);
   if (!parsed.isValid()) {
     throw new Error(`${fieldLabel} format salah (harus YYYY-MM-DD HH:mm), dapat: "${value}"`);
@@ -34,7 +51,7 @@ function parseDateOnly(value, fieldLabel) {
   if (value === null || value === undefined || value === '') {
     throw new Error(`${fieldLabel} wajib diisi`);
   }
-  if (value instanceof Date) return moment(value).format('YYYY-MM-DD');
+  if (value instanceof Date) return moment(excelDateToLocalDate(value)).format('YYYY-MM-DD');
   const parsed = moment(String(value).trim(), 'YYYY-MM-DD', true);
   if (!parsed.isValid()) {
     throw new Error(`${fieldLabel} format salah (harus YYYY-MM-DD), dapat: "${value}"`);
