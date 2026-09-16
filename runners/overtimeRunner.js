@@ -56,9 +56,13 @@ module.exports = {
 				period_date: fmtDate(conditionRow.period_date)
 			};
 
+			console.log('[overtimeRunner] panggil func_calculate_overtime_v2 dengan pparam:', pparam);
+
 			const funcRes = await client.query('SELECT func_calculate_overtime_v2($1::json) AS result', [
 				JSON.stringify(pparam)
 			]);
+
+			console.log('[overtimeRunner] hasil func_calculate_overtime_v2:', funcRes.rows[0].result);
 
 			await client.query('ROLLBACK');
 
