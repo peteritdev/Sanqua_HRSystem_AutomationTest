@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const moment = require('moment');
 
 const { pgPool } = require('../config/db');
@@ -259,7 +259,7 @@ router.post('/:id/run', async (req, res, next) => {
       return res.status(404).json({ error: 'Test case tidak ditemukan' });
     }
 
-    const runId = uuidv4();
+    const runId = randomUUID();
     const result = await overtimeRunner.run(condition);
     await writeLogAndUpdateCondition({ runId, condition, result, triggeredBy: req.testerName });
 
@@ -279,7 +279,7 @@ router.post('/:id/run', async (req, res, next) => {
 router.post('/run-all', async (req, res, next) => {
   try {
     const conditions = await TsMsOvertimeCondition.findAll({ where: { is_active: true } });
-    const runId = uuidv4();
+    const runId = randomUUID();
     let passedCount = 0;
     let notPassedCount = 0;
     let errorCount = 0;
