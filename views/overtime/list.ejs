@@ -7,10 +7,49 @@
     <button id="btn-run-all" class="btn btn-primary">RUN ALL CONDITIONS</button>
     <a href="/overtime/new" class="btn btn-secondary">+ New Test Case</a>
     <a href="/overtime/import" class="btn btn-secondary">Import Excel</a>
+    <form method="POST" action="/overtime/reset-status" class="inline-form"
+          onsubmit="return confirm('Reset last_run_status/actual_result SEMUA test case aktif jadi kosong lagi? (test case-nya sendiri tidak dihapus)');">
+      <button type="submit" class="btn btn-secondary">Reset All Status</button>
+    </form>
+    <form method="POST" action="/overtime/delete-all" class="inline-form"
+          onsubmit="return confirm('Nonaktifkan (soft-delete) SEMUA test case aktif? Tindakan ini mencakup semua baris, bukan cuma yang lagi kefilter/ketampil.');">
+      <button type="submit" class="btn btn-danger">Delete All</button>
+    </form>
   </div>
 </div>
 
 <div id="run-all-summary" class="banner" hidden></div>
+
+<form method="GET" action="/overtime" class="filter-form">
+  <div class="form-row">
+    <label>Search (Kode / Test Case / Employee)</label>
+    <input type="text" name="q" value="<%= filters.q %>" placeholder="cari kode, nama test case, atau nama/nik employee...">
+  </div>
+  <div class="form-row">
+    <label>Status</label>
+    <select name="status">
+      <option value="">-- semua --</option>
+      <option value="null" <%= filters.status === 'null' ? 'selected' : '' %>>belum pernah run</option>
+      <option value="passed" <%= filters.status === 'passed' ? 'selected' : '' %>>passed</option>
+      <option value="not_passed" <%= filters.status === 'not_passed' ? 'selected' : '' %>>not_passed</option>
+      <option value="error" <%= filters.status === 'error' ? 'selected' : '' %>>error</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label>Rows per page</label>
+    <select name="page_size">
+      <% pageSizeOptions.forEach(n => { %>
+        <option value="<%= n %>" <%= pageSize === n ? 'selected' : '' %>><%= n %></option>
+      <% }) %>
+    </select>
+  </div>
+  <div class="form-row form-row-submit">
+    <button type="submit" class="btn btn-primary">Filter</button>
+    <a href="/overtime" class="btn btn-secondary">Reset Filter</a>
+  </div>
+</form>
+
+<p class="total-count">Total: <%= totalCount %> test case</p>
 
 <table class="grid">
   <thead>
@@ -30,7 +69,7 @@
   </thead>
   <tbody>
     <% if (!conditions.length) { %>
-      <tr><td colspan="11" class="empty">Belum ada test case. Klik "+ New Test Case" untuk mulai.</td></tr>
+      <tr><td colspan="11" class="empty">Tidak ada test case yang cocok dengan filter.</td></tr>
     <% } %>
     <% conditions.forEach(c => { %>
       <tr data-row-id="<%= c.id %>">
@@ -59,6 +98,15 @@
     <% }) %>
   </tbody>
 </table>
+
+<div class="pagination">
+  <% for (let p = 1; p <= totalPages; p++) { %>
+    <a class="page-link <%= p === page ? 'active' : '' %>"
+       href="?page=<%= p %>&q=<%= encodeURIComponent(filters.q) %>&status=<%= filters.status %>&page_size=<%= pageSize %>">
+      <%= p %>
+    </a>
+  <% } %>
+</div>
 
 <%- include('../partials/footer') %>
 <script src="/js/overtime.js"></script>

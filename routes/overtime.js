@@ -143,17 +143,55 @@ async function writeLogAndUpdateCondition({ runId, condition, result, triggeredB
   });
 }
 
-// GET /overtime - grid test condition
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+// GET /overtime - grid test condition (search + filter status + paging)
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pgPool.query(`
-      SELECT oc.*, e.name AS employee_name, e.nik AS employee_nik, s.name AS shift_name
+    const q = (req.query.q || '').trim();
+    const status = req.query.status || '';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = PAGE_SIZE_OPTIONS.includes(Number(req.query.page_size)) ? Number(req.query.page_size) : 20;
+
+    const whereParts = ['oc.is_active = true'];
+    const params = [];
+
+    if (q) {
+      params.push(`%${q}%`);
+      const idx = params.length;
+      // 1 kolom search cover kode, nama test case, nama employee, & nik employee sekaligus
+      whereParts.push(
+        `(oc.test_case_code ILIKE $${idx} OR oc.test_case_name ILIKE $${idx} OR e.name ILIKE $${idx} OR e.nik ILIKE $${idx})`
+      );
+    }
+
+    if (status === 'null') {
+      whereParts.push('oc.last_run_status IS NULL');
+    } else if (status) {
+      params.push(status);
+      whereParts.push(`oc.last_run_status = $${params.length}`);
+    }
+
+    const whereClause = `WHERE ${whereParts.join(' AND ')}`;
+    const joinClause = `
       FROM ts_ms_overtimeconditions oc
       LEFT JOIN ms_employees e ON e.id = oc.employee_id
       LEFT JOIN ms_shifts s ON s.id = oc.shift_id
-      WHERE oc.is_active = true
-      ORDER BY oc.id DESC
-    `);
+      ${whereClause}
+    `;
+
+    const { rows: countRows } = await pgPool.query(`SELECT COUNT(*) AS total ${joinClause}`, params);
+    const totalCount = Number(countRows[0].total);
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+    const dataParams = [...params, pageSize, (page - 1) * pageSize];
+    const { rows } = await pgPool.query(
+      `SELECT oc.*, e.name AS employee_name, e.nik AS employee_nik, s.name AS shift_name
+       ${joinClause}
+       ORDER BY oc.id DESC
+       LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      dataParams
+    );
 
     // company_id = ms_plants.id (DB esanqua) - lihat services/companyLookup.js
     const companies = await getActiveCompanies();
@@ -163,7 +201,48 @@ router.get('/', async (req, res, next) => {
       company_name: companyNameById.get(row.company_id) || row.company_id,
     }));
 
-    res.render('overtime/list', { conditions, formatHM: decimalHoursToLabel });
+    res.render('overtime/list', {
+      conditions,
+      formatHM: decimalHoursToLabel,
+      filters: { q, status },
+      page,
+      pageSize,
+      pageSizeOptions: PAGE_SIZE_OPTIONS,
+      totalPages,
+      totalCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /overtime/reset-status - reset last_run_status/actual_result SEMUA test case aktif
+router.post('/reset-status', async (req, res, next) => {
+  try {
+    await TsMsOvertimeCondition.update(
+      {
+        last_run_status: null,
+        last_run_at: null,
+        actual_result_before_rounding: null,
+        actual_result_after_rounding: null,
+      },
+      { where: { is_active: true } }
+    );
+    res.redirect('/overtime');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /overtime/delete-all - soft-delete SEMUA test case aktif (sama semantiknya
+// dengan tombol Delete per-baris, cuma sekaligus semua)
+router.post('/delete-all', async (req, res, next) => {
+  try {
+    await TsMsOvertimeCondition.update(
+      { is_active: false, updated_by: req.testerName },
+      { where: { is_active: true } }
+    );
+    res.redirect('/overtime');
   } catch (err) {
     next(err);
   }
