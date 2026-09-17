@@ -29,9 +29,41 @@ const validateConditionForm = [
   body('expected_result_after_rounding_minutes')
     .isInt({ min: 0, max: 59 })
     .withMessage('Expected (after rounding) - menit harus 0-59'),
+  body('schedule_1_date').optional({ checkFalsy: true }).isISO8601().withMessage('Schedule 1: tanggal tidak valid'),
+  body('schedule_1_shift_id').custom((value, { req }) => {
+    const hasDate = !!req.body.schedule_1_date;
+    const isOff = req.body.schedule_1_is_off === 'on' || req.body.schedule_1_is_off === 'true';
+    if (hasDate && !isOff && !value) {
+      throw new Error('Schedule 1: shift wajib dipilih kalau bukan hari libur (is_off)');
+    }
+    return true;
+  }),
+  body('schedule_2_date').optional({ checkFalsy: true }).isISO8601().withMessage('Schedule 2: tanggal tidak valid'),
+  body('schedule_2_shift_id').custom((value, { req }) => {
+    const hasDate = !!req.body.schedule_2_date;
+    const isOff = req.body.schedule_2_is_off === 'on' || req.body.schedule_2_is_off === 'true';
+    if (hasDate && !isOff && !value) {
+      throw new Error('Schedule 2: shift wajib dipilih kalau bukan hari libur (is_off)');
+    }
+    return true;
+  }),
 ];
 
+// Baris "Employee Shift Schedule" opsional - kosongkan tanggal utk skip baris itu.
+function toScheduleField(formBody, prefix) {
+  const date = formBody[`${prefix}_date`];
+  if (!date) return { date: null, is_off: false, shift_id: null };
+  const isOff = formBody[`${prefix}_is_off`] === 'on' || formBody[`${prefix}_is_off`] === 'true';
+  return {
+    date,
+    is_off: isOff,
+    shift_id: isOff ? null : formBody[`${prefix}_shift_id`] ? Number(formBody[`${prefix}_shift_id`]) : null,
+  };
+}
+
 function toConditionPayload(formBody, testerName) {
+  const schedule1 = toScheduleField(formBody, 'schedule_1');
+  const schedule2 = toScheduleField(formBody, 'schedule_2');
   return {
     test_case_name: formBody.test_case_name.trim(),
     company_id: Number(formBody.company_id),
@@ -52,6 +84,12 @@ function toConditionPayload(formBody, testerName) {
       formBody.expected_result_after_rounding_hours,
       formBody.expected_result_after_rounding_minutes
     ),
+    schedule_1_date: schedule1.date,
+    schedule_1_is_off: schedule1.is_off,
+    schedule_1_shift_id: schedule1.shift_id,
+    schedule_2_date: schedule2.date,
+    schedule_2_is_off: schedule2.is_off,
+    schedule_2_shift_id: schedule2.shift_id,
     updated_by: testerName,
   };
 }

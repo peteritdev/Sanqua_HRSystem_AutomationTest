@@ -112,6 +112,23 @@ h1 { font-size: 20px; margin: 0 0 12px; }
 .hm-input { display: flex; align-items: center; gap: 6px; }
 .hm-input input { width: 70px; }
 .hm-input span { font-size: 12px; color: #6b7280; }
+
+.form-section-title {
+  margin: 24px 0 4px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+.form-section-title:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.section-hint { margin-top: 0; margin-bottom: 12px; }
+.schedule-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.schedule-table th, .schedule-table td { text-align: left; padding: 6px 8px; font-size: 13px; }
+.schedule-table th { color: #6b7280; font-weight: 600; }
+.schedule-table .cell-center { text-align: center; }
+.schedule-table input[type="date"], .schedule-table select {
+  padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; width: 100%;
+}
+.schedule-table select:disabled { background: #f3f4f6; color: #9ca3af; }
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .form-actions { display: flex; gap: 10px; margin-top: 8px; }
 

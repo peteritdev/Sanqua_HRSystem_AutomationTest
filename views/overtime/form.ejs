@@ -12,6 +12,15 @@
     ? (formData.is_break === 'on' || formData.is_break === 'true')
     : !!(condition && condition.is_break);
 
+  function isOffChecked(prefix) {
+    if (formData && formData[`${prefix}_is_off`] !== undefined) {
+      return formData[`${prefix}_is_off`] === 'on' || formData[`${prefix}_is_off`] === 'true';
+    }
+    return !!(condition && condition[`${prefix}_is_off`]);
+  }
+  const schedule1Off = isOffChecked('schedule_1');
+  const schedule2Off = isOffChecked('schedule_2');
+
   function hmValue(fieldPrefix, conditionColumn) {
     if (formData && formData[`${fieldPrefix}_hours`] !== undefined) {
       return { hours: formData[`${fieldPrefix}_hours`], minutes: formData[`${fieldPrefix}_minutes`] };
@@ -49,6 +58,8 @@
     <label>Test Objective</label>
     <textarea name="test_objective" rows="2"><%= fieldValue('test_objective') %></textarea>
   </div>
+
+  <h3 class="form-section-title">Overtime</h3>
 
   <div class="form-grid">
     <div class="form-row">
@@ -127,6 +138,51 @@
       </div>
     </div>
   </div>
+
+  <h3 class="form-section-title">Employee Shift Schedule (opsional)</h3>
+  <p class="muted section-hint">
+    Override sementara roster (<code>ms_employeeshiftschedules</code>) saat RUN - dipakai buat mastiin status
+    day-off employee di tanggal tertentu, terlepas dari roster asli. Kosongkan tanggal kalau tidak perlu.
+    Biasanya baris 1 = tanggal shift mulai, baris 2 = tanggal "next date" (kalau shift lewat tengah malam).
+  </p>
+
+  <table class="schedule-table">
+    <thead>
+      <tr><th>Baris</th><th>Tanggal Shift</th><th>Is Off</th><th>Shift</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><input type="date" name="schedule_1_date" value="<%= fieldValue('schedule_1_date', 'YYYY-MM-DD') %>"></td>
+        <td class="cell-center">
+          <input type="checkbox" class="schedule-is-off" data-target="schedule_1_shift_id" name="schedule_1_is_off" <%= schedule1Off ? 'checked' : '' %>>
+        </td>
+        <td>
+          <select name="schedule_1_shift_id" id="schedule_1_shift_id" class="schedule-shift-select" <%= schedule1Off ? 'disabled' : '' %>>
+            <option value="">-- pilih shift --</option>
+            <% shifts.forEach(s => { %>
+              <option value="<%= s.id %>" <%= String(fieldValue('schedule_1_shift_id')) === String(s.id) ? 'selected' : '' %>><%= s.name %></option>
+            <% }) %>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><input type="date" name="schedule_2_date" value="<%= fieldValue('schedule_2_date', 'YYYY-MM-DD') %>"></td>
+        <td class="cell-center">
+          <input type="checkbox" class="schedule-is-off" data-target="schedule_2_shift_id" name="schedule_2_is_off" <%= schedule2Off ? 'checked' : '' %>>
+        </td>
+        <td>
+          <select name="schedule_2_shift_id" id="schedule_2_shift_id" class="schedule-shift-select" <%= schedule2Off ? 'disabled' : '' %>>
+            <option value="">-- pilih shift --</option>
+            <% shifts.forEach(s => { %>
+              <option value="<%= s.id %>" <%= String(fieldValue('schedule_2_shift_id')) === String(s.id) ? 'selected' : '' %>><%= s.name %></option>
+            <% }) %>
+          </select>
+        </td>
+      </tr>
+    </tbody>
+  </table>
 
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Save</button>

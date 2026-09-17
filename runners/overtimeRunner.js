@@ -11,6 +11,55 @@ function fmtDate(value) {
 	return moment(value).format('YYYY-MM-DD');
 }
 
+// Override sementara ms_employeeshiftschedules (roster) di dalam transaction yang
+// sama - dihapus balik otomatis pas ROLLBACK. Dipakai supaya status day-off
+// employee di tanggal tertentu deterministik saat test, tidak tergantung ada/
+// tidaknya roster asli.
+//
+// ms_employeeshiftschedules.shift_id NOT NULL & bagian dari PRIMARY KEY (date,
+// employee_id, shift_id) - kalau is_off dicentang di form, dropdown shift-nya
+// di-disable (jadi kosong), tapi kolom ini tetap wajib diisi sesuatu. Nilainya
+// tidak pengaruh ke hasil kalkulasi (func cuma baca kolom is_off, bukan shift_id,
+// buat nentuin status day-off) jadi aman pakai fallback.
+async function applyScheduleOverride(client, conditionRow, dateValue, isOff, shiftIdValue) {
+	if (!dateValue) return;
+
+	let shiftId = shiftIdValue || conditionRow.shift_id;
+	if (!shiftId) {
+		const fallback = await client.query(
+			`SELECT id FROM ms_shifts WHERE company_id = $1 AND status = 1 AND COALESCE(is_delete,0) = 0 ORDER BY id LIMIT 1`,
+			[conditionRow.company_id]
+		);
+		shiftId = fallback.rows[0] && fallback.rows[0].id;
+	}
+	if (!shiftId) return; // company ini literally tidak punya shift aktif - skip
+
+	const date = fmtDate(dateValue);
+
+	// DELETE by (employee_id, date) TANPA filter shift_id - PK-nya include shift_id,
+	// jadi kalau roster asli pakai shift_id beda, insert kita nggak akan konflik PK
+	// tapi bakal jadi 2 baris utk tanggal yang sama (ambigu). Hapus dulu semua baris
+	// existing utk kombinasi employee+date ini, baru insert baris test kita.
+	await client.query(`DELETE FROM ms_employeeshiftschedules WHERE employee_id = $1 AND date = $2`, [
+		conditionRow.employee_id,
+		date
+	]);
+
+	await client.query(
+		`INSERT INTO ms_employeeshiftschedules
+       (employee_id, date, shift_id, is_off, status, created_at, created_by_name)
+     VALUES ($1,$2,$3,$4,1,NOW(),'automation-test')`,
+		[conditionRow.employee_id, date, shiftId, isOff]
+	);
+
+	console.log('[overtimeRunner] override ms_employeeshiftschedules:', {
+		employee_id: conditionRow.employee_id,
+		date,
+		shift_id: shiftId,
+		is_off: isOff
+	});
+}
+
 // Kontrak runner (lihat docs/automation-test-tool-design.md bag. 6):
 // run(conditionRow) -> { status, passed, actual_result, error_message?, duration_ms }
 //
@@ -29,6 +78,21 @@ module.exports = {
 
 		try {
 			await client.query('BEGIN');
+
+			await applyScheduleOverride(
+				client,
+				conditionRow,
+				conditionRow.schedule_1_date,
+				conditionRow.schedule_1_is_off,
+				conditionRow.schedule_1_shift_id
+			);
+			await applyScheduleOverride(
+				client,
+				conditionRow,
+				conditionRow.schedule_2_date,
+				conditionRow.schedule_2_is_off,
+				conditionRow.schedule_2_shift_id
+			);
 
 			await client.query(
 				`INSERT INTO tr_employeerequestovertimes
