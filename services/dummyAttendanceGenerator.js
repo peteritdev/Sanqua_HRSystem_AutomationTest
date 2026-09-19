@@ -61,21 +61,24 @@ function randomShift(shiftsById, shiftIds) {
   return shiftsById.get(id) || null;
 }
 
+// Tanggal "min_end_time" jatuh di hari berikutnya kalau shift-nya lewat tengah
+// malam (misal Shift 1: start 23:00, min_end_time 07:00 -> itu 07:00 KEESOKAN
+// harinya, bukan di hari yang sama sebelum jam start).
+function resolveEndDate(date, startTime, endTimeRef) {
+  return endTimeRef < startTime ? moment(date).add(1, 'day').format('YYYY-MM-DD') : date;
+}
+
 async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode) {
-  // Jam masuk/pulang mengikuti jam shift (atau jam kantor reguler kalau tidak ada shift),
-  // dikasih variasi kecil (+/- beberapa menit) biar tidak persis sama semua baris.
+  // Jam masuk mengikuti jam shift (atau jam kantor reguler kalau tidak ada shift),
+  // dikasih variasi kecil biar tidak persis sama semua baris.
   const startTime = shift ? shift.start_time : '08:30:00';
-  const endTimeRaw = shift ? shift.end_time : '17:00:00';
-  // end_time shift banyak yang format "HH:59:59" (end of hour) - bulatkan ke HH:00:00 lawannya biar wajar
-  const endTime = endTimeRaw.replace(':59:59', ':00:00');
+  // clock_out tidak boleh di bawah min_end_time - kalau digenerate, pas atau lebih
+  // (lebihnya maks 1 jam), sesuai instruksi.
+  const minEndTime = shift ? shift.min_end_time : '17:00:00';
 
   const clockIn = moment(`${date} ${startTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-5, 15), 'minutes');
-  let clockOutDate = date;
-  // Shift yang end_time-nya lebih kecil dari start_time (misal Shift 1: 23:00-06:59) berarti lewat tengah malam.
-  if (endTime < startTime) {
-    clockOutDate = moment(date).add(1, 'day').format('YYYY-MM-DD');
-  }
-  const clockOut = moment(`${clockOutDate} ${endTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-10, 20), 'minutes');
+  const clockOutDate = resolveEndDate(date, startTime, minEndTime);
+  const clockOut = moment(`${clockOutDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
   const rows = [
     [clockIn.toDate(), date],
@@ -94,9 +97,12 @@ async function insertAttendanceLog(client, employee, date, shift, deviceId, devi
 }
 
 async function insertOvertimeRequest(client, employee, date, shift, hours) {
-  const endTimeRaw = shift ? shift.end_time : '17:00:00';
-  const endTime = endTimeRaw.replace(':59:59', ':00:00');
-  const start = moment(`${date} ${endTime}`, 'YYYY-MM-DD HH:mm:ss');
+  const startTime = shift ? shift.start_time : '08:30:00';
+  const minEndTime = shift ? shift.min_end_time : '17:00:00';
+  // Sama kayak clock_out - overtime baru mulai setelah min_end_time, dan kalau
+  // shift-nya lewat tengah malam, itu jatuh di hari berikutnya (bukan hari yang sama).
+  const startDate = resolveEndDate(date, startTime, minEndTime);
+  const start = moment(`${startDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss');
   const end = start.clone().add(hours, 'hours');
 
   await client.query(
@@ -128,7 +134,7 @@ async function generateAttendanceAndShift({
   try {
     let shiftsById = new Map();
     if (shiftIds && shiftIds.length) {
-      const { rows } = await client.query('SELECT id, name, start_time, end_time FROM ms_shifts WHERE id = ANY($1::int[])', [
+      const { rows } = await client.query('SELECT id, name, start_time, end_time, min_end_time FROM ms_shifts WHERE id = ANY($1::int[])', [
         shiftIds,
       ]);
       shiftsById = new Map(rows.map((s) => [s.id, s]));
