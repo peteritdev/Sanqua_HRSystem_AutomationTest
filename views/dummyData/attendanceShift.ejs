@@ -46,17 +46,17 @@
         <% }) %>
       </select>
     </div>
-    <div class="form-row">
-      <label>Shift (utk employee is_shift - dipakai jam kerja/off/overtime)</label>
-      <select name="shift_id" id="shift_id">
-        <option value="">-- pilih company dulu --</option>
-      </select>
-    </div>
   </div>
 
-  <div class="form-row">
-    <label>Employee (centang minimal 1 - badge "shift" nandain employee is_shift=true)</label>
-    <div id="employee-checklist" class="employee-checklist">-- pilih company dulu --</div>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Shift (centang &ge;1 - tiap hari di-random pilih 1 dari yang dicentang, "1 hari maks 1 shift")</label>
+      <div id="shift-checklist" class="employee-checklist">-- pilih company dulu --</div>
+    </div>
+    <div class="form-row">
+      <label>Employee (centang minimal 1 - badge "shift" nandain employee is_shift=true)</label>
+      <div id="employee-checklist" class="employee-checklist">-- pilih company dulu --</div>
+    </div>
   </div>
 
   <h3 class="form-section-title">Rentang Tanggal</h3>

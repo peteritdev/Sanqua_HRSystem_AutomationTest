@@ -25,7 +25,7 @@ router.post('/', async (req, res, next) => {
     const sickCount = parseInt(req.body.sick_count, 10) || 0;
     const abstainCount = parseInt(req.body.abstain_count, 10) || 0;
     const offCount = parseInt(req.body.off_count, 10) || 0;
-    const shiftId = req.body.shift_id ? Number(req.body.shift_id) : null;
+    const shiftIds = [].concat(req.body.shift_ids || []).map(Number).filter(Boolean);
     const overtimeTotalHours = parseFloat(req.body.overtime_total_hours) || 0;
     const overtimeRequestCount = parseInt(req.body.overtime_request_count, 10) || 0;
 
@@ -51,6 +51,14 @@ router.post('/', async (req, res, next) => {
       [employeeIds]
     );
 
+    if (employees.some((e) => e.is_shift) && !shiftIds.length) {
+      return res.status(400).render('dummyData/attendanceShift', {
+        companies,
+        result: { error: 'Ada employee is_shift=true di batch ini - minimal 1 shift wajib dipilih' },
+        formData: req.body,
+      });
+    }
+
     const summary = await generateAttendanceAndShift({
       employees,
       startDate,
@@ -58,7 +66,7 @@ router.post('/', async (req, res, next) => {
       sickCount,
       abstainCount,
       offCount,
-      shiftId,
+      shiftIds,
       overtimeTotalHours,
       overtimeRequestCount,
     });

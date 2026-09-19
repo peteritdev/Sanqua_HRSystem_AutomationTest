@@ -55,6 +55,12 @@ async function upsertShiftSchedule(client, employee, date, shiftId, isOff) {
   );
 }
 
+function randomShift(shiftsById, shiftIds) {
+  if (!shiftIds.length) return null;
+  const id = shiftIds[randomInt(0, shiftIds.length - 1)];
+  return shiftsById.get(id) || null;
+}
+
 async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode) {
   // Jam masuk/pulang mengikuti jam shift (atau jam kantor reguler kalau tidak ada shift),
   // dikasih variasi kecil (+/- beberapa menit) biar tidak persis sama semua baris.
@@ -103,6 +109,8 @@ async function insertOvertimeRequest(client, employee, date, shift, hours) {
 }
 
 // employees: [{ id, nik, name, company_id, company_name, is_shift }]
+// shiftIds: array of shift_id (multi-select) - tiap hari di-random pilih 1 dari sini
+// ("1 hari maksimal 1 shift"; kalau hari itu kena lembur, lembur ikut shift hari itu juga).
 async function generateAttendanceAndShift({
   employees,
   startDate,
@@ -110,7 +118,7 @@ async function generateAttendanceAndShift({
   sickCount,
   abstainCount,
   offCount,
-  shiftId,
+  shiftIds,
   overtimeTotalHours,
   overtimeRequestCount,
 }) {
@@ -118,10 +126,12 @@ async function generateAttendanceAndShift({
   const summary = [];
 
   try {
-    let shift = null;
-    if (shiftId) {
-      const { rows } = await client.query('SELECT id, name, start_time, end_time FROM ms_shifts WHERE id = $1', [shiftId]);
-      shift = rows[0] || null;
+    let shiftsById = new Map();
+    if (shiftIds && shiftIds.length) {
+      const { rows } = await client.query('SELECT id, name, start_time, end_time FROM ms_shifts WHERE id = ANY($1::int[])', [
+        shiftIds,
+      ]);
+      shiftsById = new Map(rows.map((s) => [s.id, s]));
     }
 
     const { rows: devices } = await client.query('SELECT id, code FROM ms_attendancedevices LIMIT 1');
@@ -151,6 +161,14 @@ async function generateAttendanceAndShift({
         overtimeDates = takeRandomDates(workingDates, overtimeRequestCount);
       }
 
+      // 1 hari = 1 shift, di-random per tanggal dari shift yang dipilih di form -
+      // dipakai konsisten buat schedule/attendance/overtime tanggal yang sama,
+      // jadi lembur di hari itu otomatis ikut shift hari itu juga.
+      const dateShift = new Map();
+      for (const date of [...offDates, ...workingDates]) {
+        dateShift.set(date, randomShift(shiftsById, shiftIds || []));
+      }
+
       await client.query('BEGIN');
 
       for (const date of sickDates) {
@@ -159,21 +177,23 @@ async function generateAttendanceAndShift({
 
       if (employee.is_shift) {
         for (const date of offDates) {
-          await upsertShiftSchedule(client, employee, date, shiftId, true);
+          const shift = dateShift.get(date);
+          await upsertShiftSchedule(client, employee, date, shift ? shift.id : null, true);
         }
         for (const date of workingDates) {
-          await upsertShiftSchedule(client, employee, date, shiftId, false);
+          const shift = dateShift.get(date);
+          await upsertShiftSchedule(client, employee, date, shift ? shift.id : null, false);
         }
       }
 
       for (const date of workingDates) {
-        await insertAttendanceLog(client, employee, date, shift, device.id, device.code);
+        await insertAttendanceLog(client, employee, date, dateShift.get(date), device.id, device.code);
       }
 
       if (overtimeDates.length) {
         const perRequestHours = Math.round((overtimeTotalHours / overtimeDates.length) * 100) / 100;
         for (const date of overtimeDates) {
-          await insertOvertimeRequest(client, employee, date, shift, perRequestHours);
+          await insertOvertimeRequest(client, employee, date, dateShift.get(date), perRequestHours);
         }
       }
 

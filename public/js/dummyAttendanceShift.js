@@ -1,11 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
   const companySelect = document.getElementById('company_id');
-  const shiftSelect = document.getElementById('shift_id');
+  const shiftChecklist = document.getElementById('shift-checklist');
   const checklist = document.getElementById('employee-checklist');
 
   async function reload(companyId) {
     if (!companyId) {
-      shiftSelect.innerHTML = '<option value="">-- pilih company dulu --</option>';
+      shiftChecklist.innerHTML = '-- pilih company dulu --';
       checklist.innerHTML = '-- pilih company dulu --';
       return;
     }
@@ -15,8 +15,15 @@ document.addEventListener('DOMContentLoaded', () => {
       fetch(`/lookup/employees?company_id=${companyId}`).then((r) => r.json()),
     ]);
 
-    shiftSelect.innerHTML =
-      '<option value="">-- tidak pilih shift --</option>' + shifts.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+    shiftChecklist.innerHTML = shifts.length
+      ? shifts
+          .map(
+            (s) => `
+        <label><input type="checkbox" name="shift_ids" value="${s.id}"> ${s.name}</label>
+      `
+          )
+          .join('')
+      : '<span class="muted">Tidak ada shift aktif utk company ini.</span>';
 
     if (!employees.length) {
       checklist.innerHTML = '<span class="muted">Tidak ada employee aktif utk company ini.</span>';
