@@ -3,6 +3,7 @@ const { pgPool } = require('../config/db');
 
 const MARKER = 'automation-dummy-generator';
 const SICK_PERMISSION_TYPE_ID = 2; // "SAKIT" di ms_permissiontypes
+const OFF_SHIFT_ID = 4; // ms_shifts id=4 = "OFF" - placeholder khusus hari libur (konvensi data asli)
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -172,11 +173,12 @@ async function generateAttendanceAndShift({
         overtimeDates = takeRandomDates(workingDates, overtimeRequestCount);
       }
 
-      // 1 hari = 1 shift, di-random per tanggal dari shift yang dipilih di form -
-      // dipakai konsisten buat schedule/attendance/overtime tanggal yang sama,
-      // jadi lembur di hari itu otomatis ikut shift hari itu juga.
+      // 1 hari kerja = 1 shift, di-random per tanggal dari shift yang dipilih di form -
+      // dipakai konsisten buat schedule/attendance/overtime tanggal yang sama, jadi
+      // lembur di hari itu otomatis ikut shift hari itu juga. Hari OFF selalu pakai
+      // shift_id=4 ("OFF", konvensi data asli) - bukan random dari pool.
       const dateShift = new Map();
-      for (const date of [...offDates, ...workingDates]) {
+      for (const date of workingDates) {
         dateShift.set(date, randomShift(shiftsById, shiftIds || []));
       }
 
@@ -188,8 +190,7 @@ async function generateAttendanceAndShift({
 
       if (employee.is_shift) {
         for (const date of offDates) {
-          const shift = dateShift.get(date);
-          await upsertShiftSchedule(client, employee, date, shift ? shift.id : null, true);
+          await upsertShiftSchedule(client, employee, date, OFF_SHIFT_ID, true);
         }
         for (const date of workingDates) {
           const shift = dateShift.get(date);
