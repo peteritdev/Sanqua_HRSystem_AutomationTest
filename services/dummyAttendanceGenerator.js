@@ -47,10 +47,15 @@ async function insertSickPermission(client, employee, date) {
 }
 
 async function upsertShiftSchedule(client, employee, date, shiftId, isOff) {
+  // Shift di-random tiap generate, jadi PK (date, employee_id, shift_id) TIDAK bisa
+  // diandalkan sebagai kunci konflik - kalau shift_id beda dari run sebelumnya, ON
+  // CONFLICT gak kepicu dan row lama (mis. is_off=true) nyangkut jadi duplikat/ambigu.
+  // Hapus dulu row lama utk (employee_id, date) apapun shift_id-nya, baru insert yang
+  // baru - generate ulang jadi selalu bersih & deterministik.
+  await client.query(`DELETE FROM ms_employeeshiftschedules WHERE employee_id = $1 AND date = $2`, [employee.id, date]);
   await client.query(
     `INSERT INTO ms_employeeshiftschedules (employee_id, date, shift_id, is_off, status, created_at, created_by_name)
-     VALUES ($1,$2,$3,$4,1,NOW(),$5)
-     ON CONFLICT (date, employee_id, shift_id) DO UPDATE SET is_off = EXCLUDED.is_off, updated_at = NOW()`,
+     VALUES ($1,$2,$3,$4,1,NOW(),$5)`,
     [employee.id, date, shiftId, isOff, MARKER]
   );
 }
