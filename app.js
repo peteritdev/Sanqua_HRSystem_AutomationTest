@@ -15,6 +15,7 @@ const overtimeRoutes = require('./routes/overtime');
 const overtimeImportRoutes = require('./routes/overtimeImport');
 const logsRoutes = require('./routes/logs');
 const lookupRoutes = require('./routes/lookup');
+const dummyEmployeesRoutes = require('./routes/dummyEmployees');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/overtime/logs', logsRoutes);
 app.use('/overtime/import', overtimeImportRoutes);
 app.use('/overtime', overtimeRoutes);
 app.use('/lookup', lookupRoutes);
+app.use('/master/dummy-employees', dummyEmployeesRoutes);
 
 app.use((req, res) => {
   res.status(404).send('Halaman tidak ditemukan');

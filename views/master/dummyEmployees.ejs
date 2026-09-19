@@ -1,0 +1,64 @@
+<% title = 'Generate Dummy Employee' %>
+<%- include('../partials/header') %>
+
+<h1>Generate Dummy Master Employee</h1>
+<p class="muted">
+  Insert langsung (PERMANEN, bukan rollback) ke tabel <code>ms_employees</code> - company_id=1
+  ("PT INDOMULTIMAS PERKASA"). Dipakai buat sediain data employee dummy yang bisa dipakai bebas
+  di test case Overtime, tanpa ganggu data employee asli.
+</p>
+
+<% if (result && result.error) { %>
+  <div class="banner banner-error"><%= result.error %></div>
+<% } %>
+<% if (result && result.created) { %>
+  <div class="banner">
+    Berhasil generate <strong><%= result.created.length %></strong> dummy employee.
+  </div>
+  <table class="grid">
+    <thead><tr><th>ID</th><th>NIK</th><th>Nama</th></tr></thead>
+    <tbody>
+      <% result.created.forEach(e => { %>
+        <tr><td><%= e.id %></td><td><span class="code-badge"><%= e.nik %></span></td><td><%= e.name %></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<div class="import-box">
+  <form method="POST" action="/master/dummy-employees" class="form">
+    <div class="form-row">
+      <label>Jumlah karyawan yang akan dibuat</label>
+      <input type="number" name="count" min="1" max="<%= maxCount %>" placeholder="misal: 10" required>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Generate</button>
+    </div>
+    <p class="muted">Maksimal <%= maxCount %> per generate.</p>
+  </form>
+</div>
+
+<h3 class="form-section-title">Dummy Employee Terakhir (max 50)</h3>
+<table class="grid">
+  <thead>
+    <tr><th>ID</th><th>NIK</th><th>Nama</th><th>Company</th><th>Gender</th><th>Join Date</th><th>Dibuat</th></tr>
+  </thead>
+  <tbody>
+    <% if (!recent.length) { %>
+      <tr><td colspan="7" class="empty">Belum ada dummy employee yang di-generate.</td></tr>
+    <% } %>
+    <% recent.forEach(e => { %>
+      <tr>
+        <td><%= e.id %></td>
+        <td><span class="code-badge"><%= e.nik %></span></td>
+        <td><%= e.name %></td>
+        <td><%= e.company_id %></td>
+        <td><%= e.gender === 1 ? 'Laki-laki' : (e.gender === 2 ? 'Perempuan' : '-') %></td>
+        <td><%= e.join_date %></td>
+        <td><%= new Date(e.created_at).toLocaleString('id-ID') %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<%- include('../partials/footer') %>
