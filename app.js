@@ -18,6 +18,7 @@ const lookupRoutes = require('./routes/lookup');
 const dummyEmployeesRoutes = require('./routes/dummyEmployees');
 const dummyAttendanceShiftRoutes = require('./routes/dummyAttendanceShift');
 const dummyDataRoutes = require('./routes/dummyData');
+const dummyDataClearRoutes = require('./routes/dummyDataClear');
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/overtime', overtimeRoutes);
 app.use('/lookup', lookupRoutes);
 app.use('/dummy-data/employees', dummyEmployeesRoutes);
 app.use('/dummy-data/attendance-shift', dummyAttendanceShiftRoutes);
+app.use('/dummy-data/clear', dummyDataClearRoutes);
 app.use('/dummy-data', dummyDataRoutes);
 
 app.use((req, res) => {

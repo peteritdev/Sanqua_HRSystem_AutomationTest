@@ -1,0 +1,115 @@
+<%
+  title = 'Clear Data Presensi/Shift/Overtime/Permission';
+  const selectedEmployeeIds = [].concat(formData.employee_ids || []).map(String);
+  const selectedTables = [].concat(formData.tables || []);
+  function tableChecked(key) {
+    if (!selectedTables.length) return true; // default semua kecentang di form kosong
+    return selectedTables.includes(key);
+  }
+%>
+<%- include('../partials/header') %>
+
+<p><a href="/dummy-data">&larr; Generate Dummy Data</a></p>
+<h1>Clear Data Presensi / Shift / Overtime / Permission</h1>
+<p class="muted">
+  <strong>PERINGATAN:</strong> ini DELETE permanen berdasarkan company + employee + rentang tanggal -
+  <strong>termasuk data asli/real</strong> kalau kebetulan cocok kriteria (tidak dibatasi cuma data dummy).
+  Selalu cek jumlah row di tombol <strong>Preview</strong> dulu sebelum klik <strong>Confirm Delete</strong>.
+</p>
+
+<% if (error) { %>
+  <div class="banner banner-error"><%= error %></div>
+<% } %>
+
+<% if (result) { %>
+  <div class="banner">Selesai. Jumlah row terhapus:</div>
+  <table class="grid">
+    <thead><tr><th>Tabel</th><th>Row Terhapus</th></tr></thead>
+    <tbody>
+      <% result.forEach(r => { %>
+        <tr><td><%= r.label %></td><td><%= r.count %></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<% if (preview) { %>
+  <div class="banner banner-error">
+    Preview - BELUM terhapus. Cek jumlahnya, lalu klik "Confirm Delete" kalau sudah yakin.
+  </div>
+  <table class="grid">
+    <thead><tr><th>Tabel</th><th>Akan Terhapus</th></tr></thead>
+    <tbody>
+      <% preview.forEach(r => { %>
+        <tr><td><%= r.label %></td><td><strong><%= r.count %></strong></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <form method="POST" action="/dummy-data/clear"
+        onsubmit="return confirm('Yakin? Ini akan DELETE PERMANEN row di atas, termasuk data asli kalau ada. Tindakan ini tidak bisa dibatalkan.');">
+    <input type="hidden" name="company_id" value="<%= formData.company_id %>">
+    <% selectedEmployeeIds.forEach(id => { %><input type="hidden" name="employee_ids" value="<%= id %>"><% }) %>
+    <input type="hidden" name="start_date" value="<%= formData.start_date %>">
+    <input type="hidden" name="end_date" value="<%= formData.end_date %>">
+    <% Object.keys(targets).forEach(key => { %>
+      <% if (tableChecked(key)) { %><input type="hidden" name="tables" value="<%= key %>"><% } %>
+    <% }) %>
+    <button type="submit" class="btn btn-danger">Confirm Delete</button>
+    <a href="/dummy-data/clear" class="btn btn-secondary">Batal</a>
+  </form>
+<% } %>
+
+<% if (!preview) { %>
+<form method="POST" action="/dummy-data/clear/preview" class="form" id="clear-form">
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Company</label>
+      <select name="company_id" id="company_id" required>
+        <option value="">-- pilih company --</option>
+        <% companies.forEach(c => { %>
+          <option value="<%= c.id %>" <%= String(formData.company_id) === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Tanggal Mulai</label>
+      <input type="date" name="start_date" value="<%= formData.start_date || '' %>" required>
+    </div>
+    <div class="form-row">
+      <label>Tanggal Akhir</label>
+      <input type="date" name="end_date" value="<%= formData.end_date || '' %>" required>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <label>Employee (minimal 1)</label>
+    <div id="employee-checklist" class="employee-checklist">-- pilih company dulu --</div>
+  </div>
+
+  <div class="form-row">
+    <label>Tabel yang mau di-clear</label>
+    <div class="table-checklist">
+      <% Object.keys(targets).forEach(key => { %>
+        <label>
+          <input type="checkbox" name="tables" value="<%= key %>" <%= tableChecked(key) ? 'checked' : '' %>>
+          <%= targets[key].label %>
+        </label>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Preview</button>
+  </div>
+</form>
+<% } %>
+
+<%- include('../partials/footer') %>
+<script>
+  window.__clearFormPreselect = {
+    companyId: <%- JSON.stringify(formData.company_id || '') %>,
+    employeeIds: <%- JSON.stringify(selectedEmployeeIds) %>,
+  };
+</script>
+<script src="/js/dummyDataClear.js"></script>
