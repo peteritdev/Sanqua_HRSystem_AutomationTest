@@ -1,0 +1,18 @@
+<% title = 'Generate Dummy Data' %>
+<%- include('../partials/header') %>
+
+<h1>Generate Dummy Data</h1>
+<p class="muted">Menu buat sediain data dummy (insert permanen, bukan rollback) supaya test case Overtime bisa dibuat bebas tanpa ganggu data asli.</p>
+
+<div class="dummy-hub-grid">
+  <a class="dummy-hub-card" href="/dummy-data/employees">
+    <h3>Dummy Employee</h3>
+    <p>Generate master karyawan dummy (nik, nama, dll) di <code>ms_employees</code>.</p>
+  </a>
+  <a class="dummy-hub-card" href="/dummy-data/attendance-shift">
+    <h3>Dummy Presensi &amp; Jadwal Shift</h3>
+    <p>Generate presensi (hadir/sakit/abstain), jadwal shift (off), dan overtime approved secara batch.</p>
+  </a>
+</div>
+
+<%- include('../partials/footer') %>

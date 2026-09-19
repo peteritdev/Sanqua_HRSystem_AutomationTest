@@ -1,6 +1,7 @@
 <% title = 'Generate Dummy Employee' %>
 <%- include('../partials/header') %>
 
+<p><a href="/dummy-data">&larr; Generate Dummy Data</a></p>
 <h1>Generate Dummy Master Employee</h1>
 <p class="muted">
   Insert langsung (PERMANEN, bukan rollback) ke tabel <code>ms_employees</code> - company_id=1
@@ -26,7 +27,7 @@
 <% } %>
 
 <div class="import-box">
-  <form method="POST" action="/master/dummy-employees" class="form">
+  <form method="POST" action="/dummy-data/employees" class="form">
     <div class="form-row">
       <label>Jumlah karyawan yang akan dibuat</label>
       <input type="number" name="count" min="1" max="<%= maxCount %>" placeholder="misal: 10" required>

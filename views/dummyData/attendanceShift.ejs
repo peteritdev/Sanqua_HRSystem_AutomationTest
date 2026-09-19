@@ -1,0 +1,115 @@
+<% title = 'Generate Dummy Presensi & Jadwal Shift' %>
+<%- include('../partials/header') %>
+
+<p><a href="/dummy-data">&larr; Generate Dummy Data</a></p>
+<h1>Generate Dummy Presensi &amp; Jadwal Shift</h1>
+<p class="muted">
+  Insert langsung (PERMANEN, bukan rollback) ke <code>tr_employeerequestpermissions</code> (izin sakit),
+  <code>log_attendances</code> (presensi hadir), <code>ms_employeeshiftschedules</code> (jadwal shift/off),
+  dan <code>tr_employeerequestovertimes</code> (overtime approved) - khusus utk field off/overtime, cuma
+  berlaku ke employee yang <code>is_shift = true</code>.
+</p>
+
+<% if (result && result.error) { %>
+  <div class="banner banner-error"><%= result.error %></div>
+<% } %>
+<% if (result && result.summary) { %>
+  <div class="banner">Berhasil generate data utk <strong><%= result.summary.length %></strong> employee.</div>
+  <table class="grid">
+    <thead>
+      <tr><th>Employee</th><th>Sakit</th><th>Abstain</th><th>Off</th><th>Hari Kerja</th><th>Overtime Request</th></tr>
+    </thead>
+    <tbody>
+      <% result.summary.forEach(s => { %>
+        <tr>
+          <td><%= s.name %></td>
+          <td><%= s.sick %></td>
+          <td><%= s.abstain %></td>
+          <td><%= s.off %></td>
+          <td><%= s.working %></td>
+          <td><%= s.overtime_requests %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<form method="POST" action="/dummy-data/attendance-shift" class="form">
+  <h3 class="form-section-title">Batch Target</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Company</label>
+      <select name="company_id" id="company_id" required>
+        <option value="">-- pilih company --</option>
+        <% companies.forEach(c => { %>
+          <option value="<%= c.id %>"><%= c.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Shift (utk employee is_shift - dipakai jam kerja/off/overtime)</label>
+      <select name="shift_id" id="shift_id">
+        <option value="">-- pilih company dulu --</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <label>Employee (centang minimal 1 - badge "shift" nandain employee is_shift=true)</label>
+    <div id="employee-checklist" class="employee-checklist">-- pilih company dulu --</div>
+  </div>
+
+  <h3 class="form-section-title">Rentang Tanggal</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Tanggal Mulai</label>
+      <input type="date" name="start_date" required>
+    </div>
+    <div class="form-row">
+      <label>Tanggal Akhir</label>
+      <input type="date" name="end_date" required>
+    </div>
+  </div>
+
+  <h3 class="form-section-title">Presensi (berlaku semua employee, shift maupun reguler)</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Jumlah tidak hadir + izin sakit (approved)</label>
+      <input type="number" name="sick_count" min="0" value="0">
+    </div>
+    <div class="form-row">
+      <label>Jumlah abstain (tanpa keterangan)</label>
+      <input type="number" name="abstain_count" min="0" value="0">
+    </div>
+  </div>
+  <p class="muted section-hint">
+    Sisa hari (di luar sakit &amp; abstain) otomatis di-generate presensi hadir normal (clock in/out).
+  </p>
+
+  <h3 class="form-section-title">Jadwal Shift &amp; Overtime (khusus employee is_shift = true)</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Jumlah hari Off</label>
+      <input type="number" name="off_count" min="0" value="0">
+    </div>
+    <div class="form-row">
+      <label>Total jam Overtime</label>
+      <input type="number" name="overtime_total_hours" min="0" step="0.5" value="0">
+    </div>
+    <div class="form-row">
+      <label>Dibagi jadi berapa overtime request</label>
+      <input type="number" name="overtime_request_count" min="0" value="0">
+    </div>
+  </div>
+  <p class="muted section-hint">
+    Overtime request pola "long shift" (lanjut setelah jam shift berakhir, dalam 1 hari yang sama) - status
+    langsung approved. Diambil dari hari kerja aktual (bukan hari off/sakit/abstain).
+  </p>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Generate</button>
+  </div>
+</form>
+
+<%- include('../partials/footer') %>
+<script src="/js/dummyAttendanceShift.js"></script>

@@ -42,7 +42,7 @@ router.get('/employees', async (req, res, next) => {
       where += ` AND (name ILIKE $2 OR nik ILIKE $2)`;
     }
     const { rows } = await pgPool.query(
-      `SELECT id, nik, name FROM ms_employees WHERE ${where} ORDER BY name LIMIT 50`,
+      `SELECT id, nik, name, is_shift FROM ms_employees WHERE ${where} ORDER BY name LIMIT 200`,
       params
     );
     res.json(rows);
