@@ -75,14 +75,15 @@ function resolveEndDate(date, startTime, endTimeRef) {
 }
 
 async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode) {
-  // Jam masuk mengikuti jam shift (atau jam kantor reguler kalau tidak ada shift),
-  // dikasih variasi kecil biar tidak persis sama semua baris.
+  // Jam masuk mengikuti jam shift (atau jam kantor reguler kalau tidak ada shift).
+  // clock_in tidak boleh lewat dari start_time - selalu pas atau lebih awal (maks 15
+  // menit lebih awal), supaya tidak pernah ada yang telat.
   const startTime = shift ? shift.start_time : '08:30:00';
   // clock_out tidak boleh di bawah min_end_time - kalau digenerate, pas atau lebih
   // (lebihnya maks 1 jam), sesuai instruksi.
   const minEndTime = shift ? shift.min_end_time : '17:00:00';
 
-  const clockIn = moment(`${date} ${startTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-5, 15), 'minutes');
+  const clockIn = moment(`${date} ${startTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-15, 0), 'minutes');
   const clockOutDate = resolveEndDate(date, startTime, minEndTime);
   const clockOut = moment(`${clockOutDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
