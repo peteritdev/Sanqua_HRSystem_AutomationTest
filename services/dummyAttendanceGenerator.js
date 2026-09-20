@@ -86,18 +86,20 @@ async function insertAttendanceLog(client, employee, date, shift, deviceId, devi
   const clockOutDate = resolveEndDate(date, startTime, minEndTime);
   const clockOut = moment(`${clockOutDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
-  const rows = [
-    [clockIn.toDate(), date],
-    [clockOut.toDate(), date],
-  ];
+  // period_date ikut clockOutDate (bukan tanggal mulai shift) - konfirmasi dari data
+  // asli: utk shift yang lewat tengah malam (mis. Shift 1 23:00-07:00), clock-in jam
+  // 23:00 malam SEBELUMNYA tetap ditandai period_date = tanggal paginya (next date),
+  // bukan tanggal shift mulai.
+  const periodDate = clockOutDate;
+  const rows = [clockIn.toDate(), clockOut.toDate()];
 
-  for (const [attendanceTime] of rows) {
+  for (const attendanceTime of rows) {
     await client.query(
       `INSERT INTO log_attendances
          (device_code, employee_code, attendance_time, employee_name, device_type, employee_id,
           is_valid_attendance, device_id, period_date, shift_id, attend_description, created_at, updated_at)
        VALUES ($1,$2,$3,$4,1,$5,true,$6,$7,$8,$9,NOW(),NOW())`,
-      [deviceCode, employee.nik, attendanceTime, employee.name, employee.id, deviceId, date, shift ? shift.id : null, MARKER]
+      [deviceCode, employee.nik, attendanceTime, employee.name, employee.id, deviceId, periodDate, shift ? shift.id : null, MARKER]
     );
   }
 }
