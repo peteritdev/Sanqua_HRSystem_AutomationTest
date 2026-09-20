@@ -17,7 +17,7 @@
   <div class="banner">Berhasil generate data utk <strong><%= result.summary.length %></strong> employee.</div>
   <table class="grid">
     <thead>
-      <tr><th>Employee</th><th>Sakit</th><th>Abstain</th><th>Off</th><th>Hari Kerja</th><th>Overtime Request</th></tr>
+      <tr><th>Employee</th><th>Sakit</th><th>Abstain</th><th>Off</th><th>Long Shift</th><th>Double Shift (gap)</th><th>Hari Kerja</th><th>Overtime Request</th></tr>
     </thead>
     <tbody>
       <% result.summary.forEach(s => { %>
@@ -26,6 +26,8 @@
           <td><%= s.sick %></td>
           <td><%= s.abstain %></td>
           <td><%= s.off %></td>
+          <td><%= s.longshift %></td>
+          <td><%= s.gapshift %></td>
           <td><%= s.working %></td>
           <td><%= s.overtime_requests %></td>
         </tr>
@@ -102,8 +104,26 @@
     </div>
   </div>
   <p class="muted section-hint">
-    Overtime request pola "long shift" (lanjut setelah jam shift berakhir, dalam 1 hari yang sama) - status
-    langsung approved. Diambil dari hari kerja aktual (bukan hari off/sakit/abstain).
+    Overtime request lanjut setelah jam shift hari itu berakhir (dalam 1 hari yang sama) - status
+    langsung approved. Diambil dari hari kerja aktual (bukan hari off/sakit/abstain/long-shift/double-shift).
+  </p>
+
+  <h3 class="form-section-title">2 Shift dalam 1 Hari (khusus pola "Shift 1"/"Shift 2"/"Shift 3", by name)</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Jumlah hari Long Shift (Shift 1 &rarr; Shift 2, SATU presensi menerus)</label>
+      <input type="number" name="longshift_count" min="0" value="0">
+    </div>
+    <div class="form-row">
+      <label>Jumlah hari Double Shift non-longshift (Shift 1 &amp; Shift 3, DUA presensi terpisah)</label>
+      <input type="number" name="gapshift_count" min="0" value="0">
+    </div>
+  </div>
+  <p class="muted section-hint">
+    Long Shift: clock_in di awal Shift 1, clock_out di akhir Shift 2 - bukan presensi per-shift.
+    Double Shift: 2 presensi independen hari yang sama (Shift 1 penuh + Shift 3 penuh, lompat Shift 2).
+    Butuh shift bernama persis "Shift 1"/"Shift 2"/"Shift 3" aktif di company ini (di luar checklist Shift
+    di atas). Diambil dari sisa hari kerja, sebelum jatah Overtime.
   </p>
 
   <div class="form-actions">
