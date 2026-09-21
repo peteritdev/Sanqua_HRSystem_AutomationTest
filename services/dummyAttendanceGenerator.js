@@ -91,6 +91,34 @@ function randomShift(shiftsById, shiftIds) {
   return shiftsById.get(id) || null;
 }
 
+// Cek apakah jam `timeOfDay` ('HH:mm:ss') masuk window [start_time, end_time] shift
+// tsb - termasuk shift yang lewat tengah malam (start_time > end_time, mis. Shift 1
+// 23:00-06:59:59).
+function isTimeInShiftWindow(timeOfDay, shift) {
+  const { start_time, end_time } = shift;
+  if (end_time >= start_time) {
+    return timeOfDay >= start_time && timeOfDay <= end_time;
+  }
+  return timeOfDay >= start_time || timeOfDay <= end_time;
+}
+
+// Overtime nyambung setelah min_end_time shift hari itu - tapi jam mulainya bisa
+// kebetulan bertepatan sama window shift LAIN yang aktif di pool checklist (mis.
+// Shift 2 min_end_time 15:00 = persis start_time Shift 3). shift_id overtime harus
+// ikut shift yang jamnya beneran cocok sama request_start_time, bukan sekadar shift
+// hari itu yang dipakai buat presensi - kalau tidak ada yang cocok di pool, fallback
+// ke shift hari itu (supaya tidak pernah null).
+function resolveShiftForOvertimeStart(shiftsById, shiftIds, startMoment, fallbackShift) {
+  const timeOfDay = startMoment.format('HH:mm:ss');
+  for (const id of shiftIds || []) {
+    const shift = shiftsById.get(id);
+    if (shift && isTimeInShiftWindow(timeOfDay, shift)) {
+      return shift;
+    }
+  }
+  return fallbackShift;
+}
+
 // Tanggal "min_end_time" jatuh di hari berikutnya kalau shift-nya lewat tengah
 // malam (misal Shift 1: start 23:00, min_end_time 07:00 -> itu 07:00 KEESOKAN
 // harinya, bukan di hari yang sama sebelum jam start).
@@ -287,10 +315,13 @@ async function generateAttendanceAndShift({
       if (overtimeDates.length) {
         const perRequestHours = Math.round((overtimeTotalHours / overtimeDates.length) * 100) / 100;
         for (const date of overtimeDates) {
-          overtimeWindowByDate.set(date, {
-            hours: perRequestHours,
-            window: computeOvertimeWindow(date, dateShift.get(date), perRequestHours),
-          });
+          const baseShift = dateShift.get(date);
+          const window = computeOvertimeWindow(date, baseShift, perRequestHours);
+          // shift_id overtime ikut jam beneran (request_start_time) yang bisa jatuh
+          // di window shift LAIN dari pool yang dicentang (mis. lanjut shift
+          // berikutnya) - bukan cuma ngikut shift presensi hari itu.
+          const overtimeShift = resolveShiftForOvertimeStart(shiftsById, shiftIds, window.start, baseShift);
+          overtimeWindowByDate.set(date, { hours: perRequestHours, window, shift: overtimeShift });
         }
       }
 
@@ -335,8 +366,8 @@ async function generateAttendanceAndShift({
       }
 
       for (const date of overtimeDates) {
-        const { hours, window } = overtimeWindowByDate.get(date);
-        await insertOvertimeRequest(client, employee, date, dateShift.get(date), hours, window);
+        const { hours, window, shift } = overtimeWindowByDate.get(date);
+        await insertOvertimeRequest(client, employee, date, shift, hours, window);
       }
 
       await client.query('COMMIT');
