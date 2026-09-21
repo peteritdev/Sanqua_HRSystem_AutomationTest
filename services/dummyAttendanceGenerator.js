@@ -35,6 +35,15 @@ function takeRandomDates(pool, n) {
   return shuffled.slice(0, Math.min(n, pool.length));
 }
 
+// Format konvensi asli: OVT/326/241117/00326, PRM/2/220921/00002 (prefix/nomor/YYMMDD/nomor
+// padded 5 digit). Nomornya sendiri cuma dummy (bukan sequence asli), yang penting kolomnya
+// terisi - request_no kosong bikin dokumen keliatan "tidak resmi" di UI asli.
+function generateRequestNo(prefix) {
+  const num = randomInt(1, 99999);
+  const dateStr = moment().format('YYMMDD');
+  return `${prefix}/${num}/${dateStr}/${String(num).padStart(5, '0')}`;
+}
+
 // Cari Shift 1/2/3 (by name persis) utk 1 company - dipakai fitur longshift/gap-shift
 // yang khusus pola 3-shift standar ini saja (bukan shift lain).
 async function getNamedShifts(companyId) {
@@ -48,14 +57,15 @@ async function getNamedShifts(companyId) {
 }
 
 async function insertSickPermission(client, employee, date) {
+  const requestNo = generateRequestNo('PRM');
   await client.query(
     `INSERT INTO tr_employeerequestpermissions
        (employee_id, employee_name, company_id, company_name, permission_type_id, permission_type_name,
-        start_date, end_date, permission_reason, status_permission, status,
+        request_no, start_date, end_date, permission_reason, status_permission, status,
         hr_confirmed_at, hr_confirmed_by_name, total_permission_date,
         created_at, created_by_name)
-     VALUES ($1,$2,$3,$4,$5,'SAKIT',$6,$6,'Sakit (dummy generated)',2,1,NOW(),$7,1,NOW(),$7)`,
-    [employee.id, employee.name, employee.company_id, employee.company_name, SICK_PERMISSION_TYPE_ID, date, MARKER]
+     VALUES ($1,$2,$3,$4,$5,'SAKIT',$6,$7,$7,'Sakit (dummy generated)',2,1,NOW(),$8,1,NOW(),$8)`,
+    [employee.id, employee.name, employee.company_id, employee.company_name, SICK_PERMISSION_TYPE_ID, requestNo, date, MARKER]
   );
 }
 
@@ -104,7 +114,11 @@ async function insertAttendanceRow(client, employee, attendanceTime, periodDate,
 // dari data asli: clock-in 23:00 tetap di-atribusikan ke period_date paginya).
 // Konsisten sama insertLongshiftAttendance, supaya 2 kategori (hari biasa/longshift/
 // gap-shift) yang sama-sama butuh clock-in Shift 1 tidak pernah rebutan malam yang sama.
-async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode) {
+//
+// extendClockOutTo (optional moment): kalau tanggal ini JUGA kena overtime request
+// terpisah, clock_out presensi harus nutup jam overtime-nya (bukan cuma min_end_time
+// shift) - supaya tidak ada gap yang butuh edit manual.
+async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode, extendClockOutTo) {
   const startTime = shift ? shift.start_time : '08:30:00';
   const minEndTime = shift ? shift.min_end_time : '17:00:00';
   const crossesMidnight = minEndTime < startTime;
@@ -114,8 +128,11 @@ async function insertAttendanceLog(client, employee, date, shift, deviceId, devi
   // menit lebih awal), supaya tidak pernah ada yang telat.
   const clockIn = moment(`${clockInDate} ${startTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-15, 0), 'minutes');
   // clock_out tidak boleh di bawah min_end_time - kalau digenerate, pas atau lebih
-  // (lebihnya maks 1 jam), sesuai instruksi.
-  const clockOut = moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
+  // (lebihnya maks 1 jam), sesuai instruksi. Kalau ada overtime di tanggal ini,
+  // clock_out digeser nutup akhir jam overtime (+ buffer kecil) supaya konsisten.
+  const clockOut = extendClockOutTo
+    ? extendClockOutTo.clone().add(randomInt(0, 15), 'minutes')
+    : moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
   const shiftId = shift ? shift.id : null;
 
@@ -136,21 +153,41 @@ async function insertLongshiftAttendance(client, employee, date, shiftFirst, shi
   await insertAttendanceRow(client, employee, clockOut.toDate(), date, shiftFirst.id, deviceId, deviceCode);
 }
 
-async function insertOvertimeRequest(client, employee, date, shift, hours) {
+// Overtime baru mulai setelah min_end_time shift hari itu, dan kalau shift-nya lewat
+// tengah malam, itu jatuh di hari berikutnya (bukan hari yang sama) - sama kayak
+// perhitungan clock_out normal. Dipisah jadi helper supaya bisa dihitung DULUAN
+// (sebelum insertAttendanceLog utk tanggal yang sama), lalu hasilnya dipakai utk
+// nyambungin clock_out presensi ke jam overtime-nya (tidak ada gap).
+function computeOvertimeWindow(date, shift, hours) {
   const startTime = shift ? shift.start_time : '08:30:00';
   const minEndTime = shift ? shift.min_end_time : '17:00:00';
-  // Sama kayak clock_out - overtime baru mulai setelah min_end_time, dan kalau
-  // shift-nya lewat tengah malam, itu jatuh di hari berikutnya (bukan hari yang sama).
   const startDate = resolveEndDate(date, startTime, minEndTime);
   const start = moment(`${startDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss');
   const end = start.clone().add(hours, 'hours');
+  return { start, end };
+}
+
+async function insertOvertimeRequest(client, employee, date, shift, hours, window) {
+  const requestNo = generateRequestNo('OVT');
+  const { start, end } = window || computeOvertimeWindow(date, shift, hours);
 
   await client.query(
     `INSERT INTO tr_employeerequestovertimes
-       (employee_id, company_id, date, request_start_time, request_end_time, is_break, shift_id,
+       (employee_id, company_id, company_name, date, request_no, request_start_time, request_end_time, is_break, shift_id,
         status_request, status, request_total_hour, created_at, created_by_name)
-     VALUES ($1,$2,$3,$4,$5,false,$6,2,1,$7,NOW(),$8)`,
-    [employee.id, employee.company_id, date, start.toDate(), end.toDate(), shift ? shift.id : null, hours, MARKER]
+     VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,2,1,$9,NOW(),$10)`,
+    [
+      employee.id,
+      employee.company_id,
+      employee.company_name,
+      date,
+      requestNo,
+      start.toDate(),
+      end.toDate(),
+      shift ? shift.id : null,
+      hours,
+      MARKER,
+    ]
   );
 }
 
@@ -243,6 +280,20 @@ async function generateAttendanceAndShift({
         dateShift.set(date, randomShift(shiftsById, shiftIds || []));
       }
 
+      // Window overtime dihitung DULUAN (sebelum presensi) supaya clock_out di
+      // tanggal yang sama bisa disambung ke akhir jam overtime - tidak ada gap
+      // yang butuh edit manual.
+      const overtimeWindowByDate = new Map();
+      if (overtimeDates.length) {
+        const perRequestHours = Math.round((overtimeTotalHours / overtimeDates.length) * 100) / 100;
+        for (const date of overtimeDates) {
+          overtimeWindowByDate.set(date, {
+            hours: perRequestHours,
+            window: computeOvertimeWindow(date, dateShift.get(date), perRequestHours),
+          });
+        }
+      }
+
       await client.query('BEGIN');
 
       for (const date of sickDates) {
@@ -272,7 +323,8 @@ async function generateAttendanceAndShift({
       }
 
       for (const date of workingDates) {
-        await insertAttendanceLog(client, employee, date, dateShift.get(date), device.id, device.code);
+        const overtime = overtimeWindowByDate.get(date);
+        await insertAttendanceLog(client, employee, date, dateShift.get(date), device.id, device.code, overtime ? overtime.window.end : null);
       }
       for (const date of longshiftDates) {
         await insertLongshiftAttendance(client, employee, date, namedShifts.shift1, namedShifts.shift2, device.id, device.code);
@@ -282,11 +334,9 @@ async function generateAttendanceAndShift({
         await insertAttendanceLog(client, employee, date, namedShifts.shift3, device.id, device.code);
       }
 
-      if (overtimeDates.length) {
-        const perRequestHours = Math.round((overtimeTotalHours / overtimeDates.length) * 100) / 100;
-        for (const date of overtimeDates) {
-          await insertOvertimeRequest(client, employee, date, dateShift.get(date), perRequestHours);
-        }
+      for (const date of overtimeDates) {
+        const { hours, window } = overtimeWindowByDate.get(date);
+        await insertOvertimeRequest(client, employee, date, dateShift.get(date), hours, window);
       }
 
       await client.query('COMMIT');
