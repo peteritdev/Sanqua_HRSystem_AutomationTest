@@ -119,13 +119,6 @@ function resolveShiftForOvertimeStart(shiftsById, shiftIds, startMoment, fallbac
   return fallbackShift;
 }
 
-// Tanggal "min_end_time" jatuh di hari berikutnya kalau shift-nya lewat tengah
-// malam (misal Shift 1: start 23:00, min_end_time 07:00 -> itu 07:00 KEESOKAN
-// harinya, bukan di hari yang sama sebelum jam start).
-function resolveEndDate(date, startTime, endTimeRef) {
-  return endTimeRef < startTime ? moment(date).add(1, 'day').format('YYYY-MM-DD') : date;
-}
-
 async function insertAttendanceRow(client, employee, attendanceTime, periodDate, shiftId, deviceId, deviceCode) {
   await client.query(
     `INSERT INTO log_attendances
@@ -181,16 +174,20 @@ async function insertLongshiftAttendance(client, employee, date, shiftFirst, shi
   await insertAttendanceRow(client, employee, clockOut.toDate(), date, shiftFirst.id, deviceId, deviceCode);
 }
 
-// Overtime baru mulai setelah min_end_time shift hari itu, dan kalau shift-nya lewat
-// tengah malam, itu jatuh di hari berikutnya (bukan hari yang sama) - sama kayak
-// perhitungan clock_out normal. Dipisah jadi helper supaya bisa dihitung DULUAN
-// (sebelum insertAttendanceLog utk tanggal yang sama), lalu hasilnya dipakai utk
-// nyambungin clock_out presensi ke jam overtime-nya (tidak ada gap).
+// Overtime baru mulai setelah min_end_time shift hari itu. `date` di sini SUDAH
+// attribution day (persis semantik insertAttendanceLog di atas) - jadi start-nya
+// langsung `${date} ${minEndTime}`, TANPA roll ke hari berikutnya lagi (walau
+// shift-nya lewat tengah malam, min_end_time 07:00 itu ya jam 07:00 pagi di
+// `date` yang sama, karena clock_in-nya sendiri yang sudah mundur ke malam
+// sebelumnya). Dulu sempat di-roll pakai resolveEndDate() - itu salah, bikin
+// overtime mulai SEHARI SETELAH presensinya berakhir (makanya kelihatan "tidak
+// ada presensi" di tanggal overtime - itu presensi ATRIBUSI ke `date`, sedangkan
+// overtime yang salah hitung nongol di `date + 1`). Dipisah jadi helper supaya
+// bisa dihitung DULUAN (sebelum insertAttendanceLog utk tanggal yang sama), lalu
+// hasilnya dipakai utk nyambungin clock_out presensi ke jam overtime-nya.
 function computeOvertimeWindow(date, shift, hours) {
-  const startTime = shift ? shift.start_time : '08:30:00';
   const minEndTime = shift ? shift.min_end_time : '17:00:00';
-  const startDate = resolveEndDate(date, startTime, minEndTime);
-  const start = moment(`${startDate} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss');
+  const start = moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss');
   const end = start.clone().add(hours, 'hours');
   return { start, end };
 }
