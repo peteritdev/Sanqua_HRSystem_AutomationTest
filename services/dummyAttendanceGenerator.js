@@ -91,34 +91,6 @@ function randomShift(shiftsById, shiftIds) {
   return shiftsById.get(id) || null;
 }
 
-// Cek apakah jam `timeOfDay` ('HH:mm:ss') masuk window [start_time, end_time] shift
-// tsb - termasuk shift yang lewat tengah malam (start_time > end_time, mis. Shift 1
-// 23:00-06:59:59).
-function isTimeInShiftWindow(timeOfDay, shift) {
-  const { start_time, end_time } = shift;
-  if (end_time >= start_time) {
-    return timeOfDay >= start_time && timeOfDay <= end_time;
-  }
-  return timeOfDay >= start_time || timeOfDay <= end_time;
-}
-
-// Overtime nyambung setelah min_end_time shift hari itu - tapi jam mulainya bisa
-// kebetulan bertepatan sama window shift LAIN yang aktif di pool checklist (mis.
-// Shift 2 min_end_time 15:00 = persis start_time Shift 3). shift_id overtime harus
-// ikut shift yang jamnya beneran cocok sama request_start_time, bukan sekadar shift
-// hari itu yang dipakai buat presensi - kalau tidak ada yang cocok di pool, fallback
-// ke shift hari itu (supaya tidak pernah null).
-function resolveShiftForOvertimeStart(shiftsById, shiftIds, startMoment, fallbackShift) {
-  const timeOfDay = startMoment.format('HH:mm:ss');
-  for (const id of shiftIds || []) {
-    const shift = shiftsById.get(id);
-    if (shift && isTimeInShiftWindow(timeOfDay, shift)) {
-      return shift;
-    }
-  }
-  return fallbackShift;
-}
-
 async function insertAttendanceRow(client, employee, attendanceTime, periodDate, shiftId, deviceId, deviceCode) {
   await client.query(
     `INSERT INTO log_attendances
@@ -136,10 +108,10 @@ async function insertAttendanceRow(client, employee, attendanceTime, periodDate,
 // Konsisten sama insertLongshiftAttendance, supaya 2 kategori (hari biasa/longshift/
 // gap-shift) yang sama-sama butuh clock-in Shift 1 tidak pernah rebutan malam yang sama.
 //
-// extendClockOutTo (optional moment): kalau tanggal ini JUGA kena overtime request
-// terpisah, clock_out presensi harus nutup jam overtime-nya (bukan cuma min_end_time
-// shift) - supaya tidak ada gap yang butuh edit manual.
-async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode, extendClockOutTo) {
+// clockOutOverride (optional moment): kalau dikasih, dipakai APA ADANYA sbg jam
+// clock_out (dipakai gap-shift mode "berapa jam" - sesi ke-2 cuma jalan sebagian
+// dari shift-nya, bukan sampai min_end_time).
+async function insertAttendanceLog(client, employee, date, shift, deviceId, deviceCode, clockOutOverride) {
   const startTime = shift ? shift.start_time : '08:30:00';
   const minEndTime = shift ? shift.min_end_time : '17:00:00';
   const crossesMidnight = minEndTime < startTime;
@@ -149,11 +121,8 @@ async function insertAttendanceLog(client, employee, date, shift, deviceId, devi
   // menit lebih awal), supaya tidak pernah ada yang telat.
   const clockIn = moment(`${clockInDate} ${startTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-15, 0), 'minutes');
   // clock_out tidak boleh di bawah min_end_time - kalau digenerate, pas atau lebih
-  // (lebihnya maks 1 jam), sesuai instruksi. Kalau ada overtime di tanggal ini,
-  // clock_out digeser nutup akhir jam overtime (+ buffer kecil) supaya konsisten.
-  const clockOut = extendClockOutTo
-    ? extendClockOutTo.clone().add(randomInt(0, 15), 'minutes')
-    : moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
+  // (lebihnya maks 1 jam), sesuai instruksi.
+  const clockOut = clockOutOverride || moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
   const shiftId = shift ? shift.id : null;
 
@@ -163,66 +132,29 @@ async function insertAttendanceLog(client, employee, date, shift, deviceId, devi
 
 // Longshift: 2 shift berurutan (Shift 1 -> Shift 2) dianggap SATU presensi -
 // clock_in di awal shift pertama, clock_out di akhir shift kedua. BUKAN 2 presensi
-// terpisah per shift.
-async function insertLongshiftAttendance(client, employee, date, shiftFirst, shiftSecond, deviceId, deviceCode) {
+// terpisah per shift. clockOutOverride: kalau mode "berapa jam" dipilih, clock_out
+// dihitung dari start_time shift kedua + N jam (bukan sampai min_end_time-nya).
+async function insertLongshiftAttendance(client, employee, date, shiftFirst, shiftSecond, deviceId, deviceCode, clockOutOverride) {
   const crossesMidnight = shiftFirst.min_end_time < shiftFirst.start_time;
   const clockInDate = crossesMidnight ? moment(date).subtract(1, 'day').format('YYYY-MM-DD') : date;
   const clockIn = moment(`${clockInDate} ${shiftFirst.start_time}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(-15, 0), 'minutes');
-  const clockOut = moment(`${date} ${shiftSecond.min_end_time}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
+  const clockOut = clockOutOverride || moment(`${date} ${shiftSecond.min_end_time}`, 'YYYY-MM-DD HH:mm:ss').add(randomInt(0, 60), 'minutes');
 
   await insertAttendanceRow(client, employee, clockIn.toDate(), date, shiftFirst.id, deviceId, deviceCode);
   await insertAttendanceRow(client, employee, clockOut.toDate(), date, shiftFirst.id, deviceId, deviceCode);
 }
 
-// Overtime baru mulai setelah min_end_time shift hari itu. `date` di sini SUDAH
-// attribution day (persis semantik insertAttendanceLog di atas) - jadi start-nya
-// langsung `${date} ${minEndTime}`, TANPA roll ke hari berikutnya lagi (walau
-// shift-nya lewat tengah malam, min_end_time 07:00 itu ya jam 07:00 pagi di
-// `date` yang sama, karena clock_in-nya sendiri yang sudah mundur ke malam
-// sebelumnya). Dulu sempat di-roll pakai resolveEndDate() - itu salah, bikin
-// overtime mulai SEHARI SETELAH presensinya berakhir (makanya kelihatan "tidak
-// ada presensi" di tanggal overtime - itu presensi ATRIBUSI ke `date`, sedangkan
-// overtime yang salah hitung nongol di `date + 1`). Dipisah jadi helper supaya
-// bisa dihitung DULUAN (sebelum insertAttendanceLog utk tanggal yang sama), lalu
-// hasilnya dipakai utk nyambungin clock_out presensi ke jam overtime-nya.
-function computeOvertimeWindow(date, shift, hours) {
-  const minEndTime = shift ? shift.min_end_time : '17:00:00';
-  const start = moment(`${date} ${minEndTime}`, 'YYYY-MM-DD HH:mm:ss');
-  const end = start.clone().add(hours, 'hours');
-  return { start, end };
-}
-
-async function insertOvertimeRequest(client, employee, date, shift, hours, window) {
-  const requestNo = generateRequestNo('OVT');
-  const { start, end } = window || computeOvertimeWindow(date, shift, hours);
-
-  await client.query(
-    `INSERT INTO tr_employeerequestovertimes
-       (employee_id, company_id, company_name, date, request_no, request_start_time, request_end_time, is_break, shift_id,
-        status_request, status, request_total_hour, created_at, created_by_name)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,2,1,$9,NOW(),$10)`,
-    [
-      employee.id,
-      employee.company_id,
-      employee.company_name,
-      date,
-      requestNo,
-      start.toDate(),
-      end.toDate(),
-      shift ? shift.id : null,
-      hours,
-      MARKER,
-    ]
-  );
-}
-
 // employees: [{ id, nik, name, company_id, company_name, is_shift }]
 // shiftIds: array of shift_id (multi-select) - tiap hari kerja "biasa" di-random pilih 1
-// dari sini ("1 hari maksimal 1 shift"; kalau hari itu kena lembur, lembur ikut shift
-// hari itu juga).
+// dari sini ("1 hari maksimal 1 shift").
 // longshiftCount/gapshiftCount: khusus pola Shift 1/2/3 standar (by name) -
 //   longshift  = Shift 1 -> Shift 2, SATU presensi menerus (bukan per-shift).
 //   gapshift   = Shift 1 & Shift 3 (lompat Shift 2), DUA presensi terpisah hari sama.
+// longshiftMode/gapshiftMode: 'full' (default, sampai akhir shift berikutnya) atau
+// 'hours' (cuma jalan longshiftHours/gapshiftHours jam ke shift berikutnya).
+//
+// Catatan: overtime request TIDAK dibuat di sini lagi (ditakeout) - overtime akan
+// jadi form/alur terpisah. Generator ini fokus ke presensi & jadwal shift saja.
 async function generateAttendanceAndShift({
   employees,
   startDate,
@@ -231,10 +163,12 @@ async function generateAttendanceAndShift({
   abstainCount,
   offCount,
   shiftIds,
-  overtimeTotalHours,
-  overtimeRequestCount,
   longshiftCount = 0,
+  longshiftMode = 'full',
+  longshiftHours = 0,
   gapshiftCount = 0,
+  gapshiftMode = 'full',
+  gapshiftHours = 0,
 }) {
   const client = await pgPool.connect();
   const summary = [];
@@ -288,38 +222,14 @@ async function generateAttendanceAndShift({
         workingDates = workingDates.filter((d) => !gapshiftDates.includes(d));
       }
 
-      let overtimeDates = [];
-      if (employee.is_shift && overtimeRequestCount > 0 && overtimeTotalHours > 0) {
-        overtimeDates = takeRandomDates(workingDates, overtimeRequestCount);
-      }
-
       // 1 hari kerja "biasa" = 1 shift, di-random per tanggal dari shift yang dipilih
-      // di form - dipakai konsisten buat schedule/attendance/overtime tanggal yang
-      // sama, jadi lembur di hari itu otomatis ikut shift hari itu juga. Hari OFF
-      // selalu pakai shift_id=4 ("OFF", konvensi data asli) - bukan random dari pool.
-      // (insertAttendanceLog & insertLongshiftAttendance sama2 pakai semantik
-      // "date = attribution day", jadi antar tanggal berbeda TIDAK PERNAH rebutan
-      // malam clock-in yang sama - tidak perlu penghindaran manual di sini.)
+      // di form. Hari OFF selalu pakai shift_id=4 ("OFF", konvensi data asli) - bukan
+      // random dari pool. (insertAttendanceLog & insertLongshiftAttendance sama2
+      // pakai semantik "date = attribution day", jadi antar tanggal berbeda TIDAK
+      // PERNAH rebutan malam clock-in yang sama - tidak perlu penghindaran manual.)
       const dateShift = new Map();
       for (const date of workingDates) {
         dateShift.set(date, randomShift(shiftsById, shiftIds || []));
-      }
-
-      // Window overtime dihitung DULUAN (sebelum presensi) supaya clock_out di
-      // tanggal yang sama bisa disambung ke akhir jam overtime - tidak ada gap
-      // yang butuh edit manual.
-      const overtimeWindowByDate = new Map();
-      if (overtimeDates.length) {
-        const perRequestHours = Math.round((overtimeTotalHours / overtimeDates.length) * 100) / 100;
-        for (const date of overtimeDates) {
-          const baseShift = dateShift.get(date);
-          const window = computeOvertimeWindow(date, baseShift, perRequestHours);
-          // shift_id overtime ikut jam beneran (request_start_time) yang bisa jatuh
-          // di window shift LAIN dari pool yang dicentang (mis. lanjut shift
-          // berikutnya) - bukan cuma ngikut shift presensi hari itu.
-          const overtimeShift = resolveShiftForOvertimeStart(shiftsById, shiftIds, window.start, baseShift);
-          overtimeWindowByDate.set(date, { hours: perRequestHours, window, shift: overtimeShift });
-        }
       }
 
       await client.query('BEGIN');
@@ -351,20 +261,26 @@ async function generateAttendanceAndShift({
       }
 
       for (const date of workingDates) {
-        const overtime = overtimeWindowByDate.get(date);
-        await insertAttendanceLog(client, employee, date, dateShift.get(date), device.id, device.code, overtime ? overtime.window.end : null);
+        await insertAttendanceLog(client, employee, date, dateShift.get(date), device.id, device.code);
       }
       for (const date of longshiftDates) {
-        await insertLongshiftAttendance(client, employee, date, namedShifts.shift1, namedShifts.shift2, device.id, device.code);
+        // Mode 'hours': clock_out cuma sampai N jam masuk shift kedua (dihitung dari
+        // start_time-nya), bukan sampai min_end_time penuh shift kedua.
+        const clockOutOverride =
+          longshiftMode === 'hours' && longshiftHours > 0
+            ? moment(`${date} ${namedShifts.shift2.start_time}`, 'YYYY-MM-DD HH:mm:ss').add(longshiftHours, 'hours')
+            : null;
+        await insertLongshiftAttendance(client, employee, date, namedShifts.shift1, namedShifts.shift2, device.id, device.code, clockOutOverride);
       }
       for (const date of gapshiftDates) {
         await insertAttendanceLog(client, employee, date, namedShifts.shift1, device.id, device.code);
-        await insertAttendanceLog(client, employee, date, namedShifts.shift3, device.id, device.code);
-      }
-
-      for (const date of overtimeDates) {
-        const { hours, window, shift } = overtimeWindowByDate.get(date);
-        await insertOvertimeRequest(client, employee, date, shift, hours, window);
+        // Sesi ke-2 (Shift 3): mode 'hours' = cuma N jam dari start_time-nya, bukan
+        // presensi penuh sampai min_end_time.
+        const clockOutOverride =
+          gapshiftMode === 'hours' && gapshiftHours > 0
+            ? moment(`${date} ${namedShifts.shift3.start_time}`, 'YYYY-MM-DD HH:mm:ss').add(gapshiftHours, 'hours')
+            : null;
+        await insertAttendanceLog(client, employee, date, namedShifts.shift3, device.id, device.code, clockOutOverride);
       }
 
       await client.query('COMMIT');
@@ -378,7 +294,6 @@ async function generateAttendanceAndShift({
         longshift: longshiftDates.length,
         gapshift: gapshiftDates.length,
         working: workingDates.length,
-        overtime_requests: overtimeDates.length,
       });
     }
 

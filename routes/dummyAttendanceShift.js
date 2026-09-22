@@ -15,7 +15,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /dummy-data/attendance-shift - generate presensi/izin/off/overtime, INSERT PERMANEN
+// POST /dummy-data/attendance-shift - generate presensi/izin/off/jadwal shift, INSERT PERMANEN
 router.post('/', async (req, res, next) => {
   try {
     const companyId = Number(req.body.company_id);
@@ -26,10 +26,12 @@ router.post('/', async (req, res, next) => {
     const abstainCount = parseInt(req.body.abstain_count, 10) || 0;
     const offCount = parseInt(req.body.off_count, 10) || 0;
     const shiftIds = [].concat(req.body.shift_ids || []).map(Number).filter(Boolean);
-    const overtimeTotalHours = parseFloat(req.body.overtime_total_hours) || 0;
-    const overtimeRequestCount = parseInt(req.body.overtime_request_count, 10) || 0;
     const longshiftCount = parseInt(req.body.longshift_count, 10) || 0;
+    const longshiftMode = req.body.longshift_mode === 'hours' ? 'hours' : 'full';
+    const longshiftHours = parseFloat(req.body.longshift_hours) || 0;
     const gapshiftCount = parseInt(req.body.gapshift_count, 10) || 0;
+    const gapshiftMode = req.body.gapshift_mode === 'hours' ? 'hours' : 'full';
+    const gapshiftHours = parseFloat(req.body.gapshift_hours) || 0;
 
     const companies = await getActiveCompanies();
 
@@ -78,6 +80,20 @@ router.post('/', async (req, res, next) => {
         });
       }
     }
+    if (longshiftCount > 0 && longshiftMode === 'hours' && longshiftHours <= 0) {
+      return res.status(400).render('dummyData/attendanceShift', {
+        companies,
+        result: { error: 'Long Shift mode "berapa jam" butuh jumlah jam > 0' },
+        formData: req.body,
+      });
+    }
+    if (gapshiftCount > 0 && gapshiftMode === 'hours' && gapshiftHours <= 0) {
+      return res.status(400).render('dummyData/attendanceShift', {
+        companies,
+        result: { error: 'Double Shift (gap) mode "berapa jam" butuh jumlah jam > 0' },
+        formData: req.body,
+      });
+    }
 
     const summary = await generateAttendanceAndShift({
       employees,
@@ -87,10 +103,12 @@ router.post('/', async (req, res, next) => {
       abstainCount,
       offCount,
       shiftIds,
-      overtimeTotalHours,
-      overtimeRequestCount,
       longshiftCount,
+      longshiftMode,
+      longshiftHours,
       gapshiftCount,
+      gapshiftMode,
+      gapshiftHours,
     });
 
     res.render('dummyData/attendanceShift', {
