@@ -1,0 +1,100 @@
+<% title = 'Generate Overtime Request dari Presensi' %>
+<%- include('../partials/header') %>
+
+<p><a href="/dummy-data">&larr; Generate Dummy Data</a></p>
+<h1>Generate Overtime Request dari Presensi</h1>
+<p class="muted">
+  Scan <code>rpt_attendances</code> (laporan presensi yang sudah kebentuk) di rentang tanggal &amp;
+  employee yang dipilih, cari hari <strong>Long Shift</strong> (1 row, clock_out nyambung ke shift
+  berikutnya) dan/atau <strong>Gap Shift</strong> (2 row beda shift di tanggal yang sama), lalu insert
+  langsung (PERMANEN) ke <code>tr_employeerequestovertimes</code> - status langsung approved.
+  <code>shift_id</code> overtime ikut apa adanya dari row <code>rpt_attendances</code> yang cocok.
+  Tanggal yang sudah punya overtime request (dari mana pun) otomatis di-skip.
+</p>
+
+<% if (result && result.error) { %>
+  <div class="banner banner-error"><%= result.error %></div>
+<% } %>
+<% if (result && result.summary) { %>
+  <div class="banner">Berhasil diproses utk <strong><%= result.summary.length %></strong> employee.</div>
+  <table class="grid">
+    <thead>
+      <tr><th>Employee</th><th>Long Shift</th><th>Gap Shift</th><th>Di-skip (sudah ada overtime)</th></tr>
+    </thead>
+    <tbody>
+      <% result.summary.forEach(s => { %>
+        <tr>
+          <td><%= s.name %></td>
+          <td><%= s.longshift %></td>
+          <td><%= s.gapshift %></td>
+          <td><%= s.skipped_existing %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<form method="POST" action="/dummy-data/overtime-generate" class="form">
+  <h3 class="form-section-title">Batch Target</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Company</label>
+      <select name="company_id" id="company_id" required>
+        <option value="">-- pilih company --</option>
+        <% companies.forEach(c => { %>
+          <option value="<%= c.id %>"><%= c.name %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Employee (centang minimal 1)</label>
+      <div id="employee-checklist" class="employee-checklist">-- pilih company dulu --</div>
+    </div>
+  </div>
+
+  <h3 class="form-section-title">Rentang Tanggal Presensi</h3>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Tanggal Mulai</label>
+      <input type="date" name="start_date" required>
+    </div>
+    <div class="form-row">
+      <label>Tanggal Akhir</label>
+      <input type="date" name="end_date" required>
+    </div>
+  </div>
+
+  <h3 class="form-section-title">Pola yang Diproses</h3>
+  <div class="form-grid">
+    <div class="form-row form-row-checkbox">
+      <label><input type="checkbox" name="process_longshift" checked> Long Shift (2 shift berturut-turut, 1 presensi menerus)</label>
+    </div>
+    <div class="form-row form-row-checkbox">
+      <label><input type="checkbox" name="process_gapshift" checked> Gap Shift (2 presensi terpisah, beda shift, tanggal sama)</label>
+    </div>
+  </div>
+  <div class="form-grid">
+    <div class="form-row">
+      <label>Gap Shift - jadikan overtime sesi ke berapa?</label>
+      <div class="mode-row">
+        <label><input type="radio" name="gapshift_session" value="first" checked> Sesi pertama (urut jam clock_in)</label>
+        <label><input type="radio" name="gapshift_session" value="second"> Sesi kedua</label>
+      </div>
+    </div>
+  </div>
+  <p class="muted section-hint">
+    Long Shift: overtime = porsi tambahan doang, dari min_end_time shift aslinya sampai clock_out aktual
+    (bukan seluruh durasi presensi). Gap Shift: overtime = seluruh durasi sesi yang dipilih (dianggap kerja
+    ekstra di luar shift utama hari itu).
+  </p>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Generate</button>
+  </div>
+</form>
+
+<%- include('../partials/footer') %>
+<script src="/js/dummyOvertimeGenerate.js"></script>

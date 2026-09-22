@@ -306,4 +306,4 @@ async function generateAttendanceAndShift({
   }
 }
 
-module.exports = { generateAttendanceAndShift, getNamedShifts, MARKER };
+module.exports = { generateAttendanceAndShift, getNamedShifts, generateRequestNo, MARKER };
