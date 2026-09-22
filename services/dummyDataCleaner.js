@@ -29,6 +29,12 @@ const TARGETS = {
     dateColumn: 'start_date',
     hasCompanyColumn: true,
   },
+  rptAttendance: {
+    label: 'Laporan Presensi (rpt_attendances)',
+    table: 'rpt_attendances',
+    dateColumn: 'date',
+    hasCompanyColumn: true,
+  },
 };
 
 function buildQuery(target, { companyId, employeeIds, startDate, endDate }) {
